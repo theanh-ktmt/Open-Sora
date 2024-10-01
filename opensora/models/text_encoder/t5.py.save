@@ -161,7 +161,7 @@ class T5Encoder:
         self.output_dim = self.t5.model.config.d_model
         self.dtype = dtype
 
-        if shardformer:
+q        if shardformer:
             self.shardformer_t5()
 
     def shardformer_t5(self):

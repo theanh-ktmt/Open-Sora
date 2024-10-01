@@ -170,7 +170,6 @@ from opensora.datasets import IMG_FPS, save_sample
 from opensora.datasets.aspect import get_image_size, get_num_frames
 from opensora.models.text_encoder.t5 import text_preprocessing
 from opensora.utils.inference_utils import (
-    add_watermark,
     append_generated,
     append_score_to_prompts,
     apply_mask_strategy,
@@ -195,6 +194,14 @@ device = torch.device("cuda")
 vae, text_encoder, stdit, scheduler = build_models(
     args.model_type, config, enable_optimization=args.enable_optimization
 )
+with open("vae.txt", "w") as f:
+    f.write(str(vae))
+
+with open("text_encoder.txt", "w") as f:
+    f.write(str(text_encoder))
+
+with open("stdit.txt", "w") as f:
+    f.write(str(stdit))
 
 
 def run_inference(
@@ -334,12 +341,16 @@ def run_inference(
         for loop_i in range(num_loop):
             # 4.4 sample in hidden space
             batch_prompts_loop = extract_prompts_loop(batch_prompts, loop_i)
+            print("Batch prompts: {}".format(batch_prompts_loop))
 
             # == loop ==
             if loop_i > 0:
                 refs, mask_strategy = append_generated(
                     vae, video_clips[-1], refs, mask_strategy, loop_i, condition_frame_length, condition_frame_edit
                 )
+
+            print("Reference: {}".format(refs))
+            print("Mask strategy: {}".format(mask_strategy))
 
             # == sampling ==
             z = torch.randn(len(batch_prompts), vae.out_channels, *latent_size, device=device, dtype=dtype)
@@ -363,7 +374,9 @@ def run_inference(
                 progress=True,
                 mask=masks,
             )
+            print("Scheduler output dtype: {}".format(samples.dtype))
             samples = vae.decode(samples.to(dtype), num_frames=num_frames)
+            print("Final output dtype: {}".format(samples.dtype))
             video_clips.append(samples)
 
         # =========================
@@ -379,17 +392,19 @@ def run_inference(
         saved_path = save_sample(video, save_path=save_path, fps=24)
         torch.cuda.empty_cache()
 
+        # TODO: Remove watermark
         # add watermark
         # all watermarked videos should have a _watermarked suffix
-        if mode != "Text2Image" and os.path.exists(WATERMARK_PATH):
-            watermarked_path = saved_path.replace(".mp4", "_watermarked.mp4")
-            success = add_watermark(saved_path, WATERMARK_PATH, watermarked_path)
-            if success:
-                return watermarked_path
-            else:
-                return saved_path
-        else:
-            return saved_path
+        # if mode != "Text2Image" and os.path.exists(WATERMARK_PATH):
+        #     watermarked_path = saved_path.replace(".mp4", "_watermarked.mp4")
+        #     success = add_watermark(saved_path, WATERMARK_PATH, watermarked_path)
+        #     if success:
+        #         return watermarked_path
+        #     else:
+        #         return saved_path
+        # else:
+        #     return saved_path
+        return saved_path
 
 
 @spaces.GPU(duration=200)

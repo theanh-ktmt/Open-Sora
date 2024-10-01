@@ -5,11 +5,11 @@ fps = 24
 frame_interval = 1
 save_fps = 24
 
-save_dir = "./save/tmp"
+save_dir = "./save/inference/test"
 seed = 42
 batch_size = 1
 multi_resolution = "STDiT2"
-dtype = "bf16"
+dtype = "fp16"
 condition_frame_length = 5
 align = 5
 
@@ -26,11 +26,7 @@ vae = dict(
     micro_frame_size=17,
     micro_batch_size=4,
 )
-text_encoder = dict(
-    type="t5",
-    from_pretrained="DeepFloyd/t5-v1_1-xxl",
-    model_max_length=300,
-)
+text_encoder = dict(type="t5", from_pretrained="DeepFloyd/t5-v1_1-xxl", model_max_length=300, dtype=dtype)
 scheduler = dict(
     type="rflow",
     use_timestep_transform=True,
