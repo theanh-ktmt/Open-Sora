@@ -6,7 +6,6 @@ from pathlib import Path
 
 import torch
 import torch.nn as nn
-from torch.profiler import ProfilerActivity, profile, record_function
 
 from opensora.datasets import IMG_FPS
 from opensora.datasets.utils import read_from_path
@@ -90,9 +89,15 @@ def extract_json_from_prompts(prompts, reference, mask_strategy):
     return ret_prompts, reference, mask_strategy
 
 
-def collect_references_batch(reference_paths, vae, image_size, return_latencies=False, do_profiling=False):
+def collect_references_batch(
+    reference_paths,
+    vae,
+    image_size,
+    return_latencies=False,
+):
     refs_x = []  # refs_x: [batch, ref_num, C, T, H, W]
     latencies = []
+
     for reference_path in reference_paths:
         if reference_path == "":
             refs_x.append([])
@@ -106,22 +111,17 @@ def collect_references_batch(reference_paths, vae, image_size, return_latencies=
             r = read_from_path(r_path, image_size, transform_name="resize_crop")
 
             start = time.time()
-            if do_profiling:
-                with profile(
-                    activities=[ProfilerActivity.CUDA],
-                    # profile_memory=True,
-                    record_shapes=True,
-                ) as prof:
-                    with record_function("image_embedding"):
-                        r_x = vae.encode(r.unsqueeze(0).to(vae.device, vae.dtype))
-
-                with open("save/profile/image_embedding.profile", "w") as f:
-                    table = prof.key_averages().table(sort_by="cuda_time_total", row_limit=100)
-                    f.write(str(table))
-                prof.export_chrome_trace("save/profile/image_embedding.json")
-            else:
-                r_x = vae.encode(r.unsqueeze(0).to(vae.device, vae.dtype))
-
+            # with profile(
+            #     activities=[ProfilerActivity.CUDA],
+            #     # profile_memory=True,
+            #     record_shapes=True,
+            # ) as prof:
+            #     with record_function("image_embedding"):
+            r_x = vae.encode(r.unsqueeze(0).to(vae.device, vae.dtype))
+            # with open("save/profile/image_embedding.profile", "w") as f:
+            #     table = prof.key_averages().table(sort_by="cuda_time_total", row_limit=100)
+            #     f.write(str(table))
+            # prof.export_chrome_trace("save/profile/image_embedding.json")
             latency += time.time() - start
 
             r_x = r_x.squeeze(0)

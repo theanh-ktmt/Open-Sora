@@ -49,7 +49,6 @@ class RFLOW:
         guidance_scale=None,
         progress=True,
         return_latencies=False,
-        do_profiling=False,
     ):
         latencies = {}
 
@@ -58,24 +57,30 @@ class RFLOW:
             guidance_scale = self.cfg_scale
 
         n = len(prompts)
-        # text encoding
-        start = time.time()
-        if do_profiling:
-            with profile(
-                activities=[ProfilerActivity.CUDA],
-                # profile_memory=True,
-                record_shapes=True,
-            ) as prof:
-                with record_function("text_embedding"):
-                    model_args = text_encoder.encode(prompts)
 
-            with open("save/profile/text_embedding.profile", "w") as f:
-                table = prof.key_averages().table(sort_by="cuda_time_total", row_limit=100)
-                f.write(str(table))
-            prof.export_chrome_trace("save/profile/text_embedding.json")
-        else:
-            model_args = text_encoder.encode(prompts)
+        # For profiling
+        # with profile(
+        #     activities=[ProfilerActivity.CUDA],
+        #     # profile_memory=True,
+        #     record_shapes=True,
+        # ) as prof:
+        #     with record_function("text_embedding"):
+        #         model_args = text_encoder.encode(prompts)
+        # with open("save/profile/text_embedding.profile", "w") as f:
+        #     table = prof.key_averages().table(sort_by="cuda_time_total", row_limit=100)
+        #     f.write(str(table))
+        # prof.export_chrome_trace("save/profile/text_embedding.json")
+
+        start = time.time()
+        model_args = text_encoder.encode(prompts)
         latencies["text_encoder"] = time.time() - start
+
+        # text encoder don't have forward function
+        # if writer:
+        #     def text_encoder_wrapper(x):
+        #         return text_encoder.encode(x)
+        #     writer.add_graph(text_encoder_wrapper, prompts)
+        #     logger.info('Logged Text Encoder graph to Tensorboard.')
 
         y_null = text_encoder.null(n)
         model_args["y"] = torch.cat([model_args["y"], y_null], 0)
@@ -97,85 +102,51 @@ class RFLOW:
         progress_wrap = tqdm if progress else (lambda x: x)
 
         latencies["backbone"] = 0
-        if do_profiling:
-            with profile(
-                activities=[ProfilerActivity.CUDA],
-                # profile_memory=True,
-                record_shapes=True,
-            ) as prof:
-                for i, t in progress_wrap(enumerate(timesteps)):
-                    # mask for adding noise
-                    if mask is not None:
-                        mask_t = mask * self.num_timesteps
-                        x0 = z.clone()
-                        x_noise = self.scheduler.add_noise(x0, torch.randn_like(x0), t)
+        # For profiling
+        # with profile(
+        #     activities=[ProfilerActivity.CUDA],
+        #     # profile_memory=True,
+        #     record_shapes=True,
+        # ) as prof:
+        for i, t in progress_wrap(enumerate(timesteps)):
+            # mask for adding noise
+            if mask is not None:
+                mask_t = mask * self.num_timesteps
+                x0 = z.clone()
+                x_noise = self.scheduler.add_noise(x0, torch.randn_like(x0), t)
 
-                        mask_t_upper = mask_t >= t.unsqueeze(1)
-                        model_args["x_mask"] = mask_t_upper.repeat(2, 1)
-                        mask_add_noise = mask_t_upper & ~noise_added
+                mask_t_upper = mask_t >= t.unsqueeze(1)
+                model_args["x_mask"] = mask_t_upper.repeat(2, 1)
+                mask_add_noise = mask_t_upper & ~noise_added
 
-                        z = torch.where(mask_add_noise[:, None, :, None, None], x_noise, x0)
-                        noise_added = mask_t_upper
+                z = torch.where(mask_add_noise[:, None, :, None, None], x_noise, x0)
+                noise_added = mask_t_upper
 
-                    # classifier-free guidance
-                    z_in = torch.cat([z, z], 0).to(text_encoder.dtype)
-                    t = torch.cat([t, t], 0).to(text_encoder.dtype)
+            # classifier-free guidance
+            z_in = torch.cat([z, z], 0).to(text_encoder.dtype)
+            t = torch.cat([t, t], 0).to(text_encoder.dtype)
 
-                    start = time.time()
+            start = time.time()
 
-                    with record_function("video_generation"):
-                        pred = model(z_in, t, **model_args).chunk(2, dim=1)[0]
-                    latencies["backbone"] += time.time() - start
+            # with record_function("video_generation"):
+            pred = model(z_in, t, **model_args).chunk(2, dim=1)[0]
+            latencies["backbone"] += time.time() - start
 
-                    pred_cond, pred_uncond = pred.chunk(2, dim=0)
-                    v_pred = pred_uncond + guidance_scale * (pred_cond - pred_uncond)
+            pred_cond, pred_uncond = pred.chunk(2, dim=0)
+            v_pred = pred_uncond + guidance_scale * (pred_cond - pred_uncond)
 
-                    # update z
-                    dt = timesteps[i] - timesteps[i + 1] if i < len(timesteps) - 1 else timesteps[i]
-                    dt = dt / self.num_timesteps
-                    z = z + v_pred * dt[:, None, None, None, None]
+            # update z
+            dt = timesteps[i] - timesteps[i + 1] if i < len(timesteps) - 1 else timesteps[i]
+            dt = dt / self.num_timesteps
+            z = z + v_pred * dt[:, None, None, None, None]
 
-                    if mask is not None:
-                        z = torch.where(mask_t_upper[:, None, :, None, None], z, x0)
+            if mask is not None:
+                z = torch.where(mask_t_upper[:, None, :, None, None], z, x0)
 
-            with open("save/profile/backbone.profile", "w") as f:
-                table = prof.key_averages().table(sort_by="cuda_time_total", row_limit=100)
-                f.write(str(table))
-            prof.export_chrome_trace("save/profile/backbone.json")
-
-        else:
-            for i, t in progress_wrap(enumerate(timesteps)):
-                # mask for adding noise
-                if mask is not None:
-                    mask_t = mask * self.num_timesteps
-                    x0 = z.clone()
-                    x_noise = self.scheduler.add_noise(x0, torch.randn_like(x0), t)
-
-                    mask_t_upper = mask_t >= t.unsqueeze(1)
-                    model_args["x_mask"] = mask_t_upper.repeat(2, 1)
-                    mask_add_noise = mask_t_upper & ~noise_added
-
-                    z = torch.where(mask_add_noise[:, None, :, None, None], x_noise, x0)
-                    noise_added = mask_t_upper
-
-                # classifier-free guidance
-                z_in = torch.cat([z, z], 0).to(text_encoder.dtype)
-                t = torch.cat([t, t], 0).to(text_encoder.dtype)
-
-                start = time.time()
-                pred = model(z_in, t, **model_args).chunk(2, dim=1)[0]
-                latencies["backbone"] += time.time() - start
-
-                pred_cond, pred_uncond = pred.chunk(2, dim=0)
-                v_pred = pred_uncond + guidance_scale * (pred_cond - pred_uncond)
-
-                # update z
-                dt = timesteps[i] - timesteps[i + 1] if i < len(timesteps) - 1 else timesteps[i]
-                dt = dt / self.num_timesteps
-                z = z + v_pred * dt[:, None, None, None, None]
-
-                if mask is not None:
-                    z = torch.where(mask_t_upper[:, None, :, None, None], z, x0)
+        # with open("save/profile/backbone.profile", "w") as f:
+        #     table = prof.key_averages().table(sort_by="cuda_time_total", row_limit=100)
+        #     f.write(str(table))
+        # prof.export_chrome_trace("save/profile/backbone.json")
 
         if return_latencies:
             return z, latencies
