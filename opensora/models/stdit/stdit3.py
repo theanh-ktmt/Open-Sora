@@ -357,13 +357,11 @@ class STDiT3(PreTrainedModel):
 
     def forward(self, x, timestep, y, mask=None, x_mask=None, fps=None, height=None, width=None, **kwargs):
         dtype = self.x_embedder.proj.weight.dtype
-        # logger.info(f"SDTiT forward: dtype = {dtype}")
 
         B = x.size(0)
         x = x.to(dtype)
         timestep = timestep.to(dtype)
         y = y.to(dtype)
-        # logger.info(f"SDTiT forward: x({x.dtype}) timestep({timestep.dtype}) y({y.dtype})")
 
         # === get pos embed ===
         _, _, Tx, Hx, Wx = x.size()
@@ -391,7 +389,6 @@ class STDiT3(PreTrainedModel):
         resolution_sq = (height[0].item() * width[0].item()) ** 0.5
         scale = resolution_sq / self.input_sq_size
         pos_emb = self.pos_embed(x, H, W, scale=scale, base_size=base_size)
-        # logger.info(f"SDTiT forward: pos_emb({pos_emb.dtype})")
 
         # === get timestep embed ===
         t = self.t_embedder(timestep, dtype=x.dtype)  # [B, C]
@@ -417,7 +414,6 @@ class STDiT3(PreTrainedModel):
         x = self.x_embedder(x)  # [B, N, C]
         x = rearrange(x, "B (T S) C -> B T S C", T=T, S=S)
         x = x + pos_emb
-        # logger.info(f"SDTiT forward: y({y.dtype}) x({x.dtype})")
 
         # shard over the sequence dim if sp is enabled
         if self.enable_sequence_parallelism:
@@ -425,15 +421,12 @@ class STDiT3(PreTrainedModel):
             S = S // dist.get_world_size(get_sequence_parallel_group())
 
         x = rearrange(x, "B T S C -> B (T S) C", T=T, S=S)
-        # logger.info(f"SDTiT forward: x({x.dtype}) at rearrange")
 
         # === blocks ===
         i = 0
         for spatial_block, temporal_block in zip(self.spatial_blocks, self.temporal_blocks):
             x = auto_grad_checkpoint(spatial_block, x, y, t_mlp, y_lens, x_mask, t0_mlp, T, S)
-            # logger.info(f"SDTiT forward: x({x.dtype}) at spatial_block {i}")
             x = auto_grad_checkpoint(temporal_block, x, y, t_mlp, y_lens, x_mask, t0_mlp, T, S)
-            # logger.info(f"SDTiT forward: x({x.dtype}) at temporal_block {i}")
             i += 1
 
         if self.enable_sequence_parallelism:
@@ -444,13 +437,10 @@ class STDiT3(PreTrainedModel):
 
         # === final layer ===
         x = self.final_layer(x, t, x_mask, t0, T, S)
-        # logger.info(f"SDTiT forward: x({x.dtype}) at final_layer")
         x = self.unpatchify(x, T, H, W, Tx, Hx, Wx)
-        # logger.info(f"SDTiT forward: x({x.dtype}) at unpatchify")
 
         # cast to float32 for better accuracy
         x = x.to(torch.float32)
-        # logger.info(f"STDiT final output: {x.dtype}")
         return x
 
     def unpatchify(self, x, N_t, N_h, N_w, R_t, R_h, R_w):

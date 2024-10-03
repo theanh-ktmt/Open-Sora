@@ -123,8 +123,8 @@ class RFLOW:
                 noise_added = mask_t_upper
 
             # classifier-free guidance
-            z_in = torch.cat([z, z], 0).to(text_encoder.dtype)
-            t = torch.cat([t, t], 0).to(text_encoder.dtype)
+            z_in = torch.cat([z, z], 0)
+            t = torch.cat([t, t], 0)
 
             start = time.time()
 
