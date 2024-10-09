@@ -6,7 +6,7 @@ from glob import glob
 from mmengine.config import Config
 
 
-def parse_args(training=False, mode=None):
+def parse_args(training=False):
     parser = argparse.ArgumentParser()
 
     # model config
@@ -81,145 +81,6 @@ def parse_args(training=False, mode=None):
         parser.add_argument("--warmup-steps", default=None, type=int, help="warmup steps")
         parser.add_argument("--record-time", default=False, action="store_true", help="record time of each part")
 
-    # ======================================================
-    # Additional Arguments
-    # ======================================================
-    if mode == "get_calib":
-        parser.add_argument("--data_num", default=100, type=int)
-        parser.add_argument("--save_inp_oup", action="store_true")
-    elif mode == "ptq":
-        parser.add_argument("--calib_data", default=None, type=str, help="path to quantization calib data")
-    elif mode == "quant_inference":
-        parser.add_argument("--dataset_type", default="opensora", type=str)
-        parser.add_argument(
-            "--quant_ckpt",
-            type=str,
-            default=None,
-            help="path to config which constructs model",
-        )
-    elif mode == "qat":
-        parser.add_argument("--quant_dir", default=None, type=str, help="the dir with quant ckpt and quant config")
-    elif mode is None:
-        pass
-    else:
-        raise NotImplementedError
-
-    if mode == "ptq" or mode == "quant_inference":
-        parser.add_argument(
-            "--ptq_config",
-            type=str,
-            default=None,
-            help="path to config which constructs model",
-        )
-        parser.add_argument(
-            "--part_quant",
-            action="store_true",
-            help="whether only quant a part",
-        )
-        parser.add_argument(
-            "--skip_quant_weight",
-            action="store_true",
-            help="whether to skip weight quantization",
-        )
-        parser.add_argument(
-            "--skip_quant_act",
-            action="store_true",
-            help="whether to skip activation quantization",
-        )
-        parser.add_argument(
-            "--num_videos",
-            type=int,
-            default=1000,
-            help="number of generated videos",
-        )
-        parser.add_argument(
-            "--layer_wise_quant",
-            action="store_true",
-            help="whether only quant a part of layers",
-        )
-        parser.add_argument(
-            "--group_wise_quant",
-            action="store_true",
-            help="whether only quant a group",
-        )
-        parser.add_argument(
-            "--timestep_wise_quant",
-            action="store_true",
-            help="whether only quant a part of timesteps",
-        )
-        parser.add_argument(
-            "--block_group_wise_quant",
-            action="store_true",
-            help="whether only quant a part of timesteps",
-        )
-        parser.add_argument(
-            "--quant_ratio",
-            type=float,
-            default=1.0,
-            help="the ratio of quant layer",
-        )
-        parser.add_argument(
-            "--part_fp",
-            action="store_true",
-            help="whether only fp a part of layer",
-        )
-        parser.add_argument(
-            "--fp_ratio",
-            type=float,
-            default=1.0,
-            help="the ratio of fp layer",
-        )
-        parser.add_argument(
-            "--timestep_wise_mp",
-            action="store_true",
-            help="timestep wise mixed precision",
-        )
-        parser.add_argument(
-            "--weight_mp",
-            action="store_true",
-            help="mixed precision for weight",
-        )
-        parser.add_argument(
-            "--act_mp",
-            action="store_true",
-            help="mixed precision for act",
-        )
-        parser.add_argument(
-            "--time_mp_config_weight",
-            type=str,
-            default=None,
-            help="path to config of mixed precision for weight",
-        )
-        parser.add_argument(
-            "--time_mp_config_act",
-            type=str,
-            default=None,
-            help="path to config of mixed precision for act",
-        )
-        parser.add_argument(
-            "--group_quant",
-            type=str,
-            default=None,
-            help="path to config of mixed precision for act",
-        )
-        parser.add_argument(
-            "--smooth_quant_alpha",
-            nargs="+",
-            type=float,
-            default=None,
-            help="path to config of mixed precision for act",
-        )
-        parser.add_argument(
-            "--block_wise_quant_progressively",
-            action="store_true",
-            help="mixed precision for act",
-        )
-        parser.add_argument(
-            "--block_wise_quant",
-            action="store_true",
-            help="mixed precision for act",
-        )
-
     return parser.parse_args()
 
 
@@ -264,8 +125,8 @@ def read_config(config_path):
     return cfg
 
 
-def parse_configs(training=False, mode=None):
-    args = parse_args(training, mode)
+def parse_configs(training=False):
+    args = parse_args(training)
     cfg = read_config(args.config)
     cfg = merge_args(cfg, args, training)
     return cfg
