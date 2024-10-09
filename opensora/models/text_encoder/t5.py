@@ -138,13 +138,14 @@ class T5Encoder:
         from_pretrained=None,
         model_max_length=120,
         device="cuda",
-        dtype=torch.float,
+        dtype="fp32",
         cache_dir=None,
         shardformer=False,
         local_files_only=False,
     ):
         assert from_pretrained is not None, "Please specify the path to the T5 model"
 
+        dtype = dtype_mapping(dtype)
         self.t5 = T5Embedder(
             device=device,
             torch_dtype=dtype,
@@ -333,3 +334,15 @@ def text_preprocessing(text, use_text_preprocessing: bool = True):
         return text
     else:
         return text.lower().strip()
+
+
+def dtype_mapping(text: str):
+    MAPPINGS = {
+        "fp16": torch.float16,
+        "fp32": torch.float32,
+        "bf16": torch.bfloat16,
+    }
+
+    if text not in MAPPINGS:
+        return torch.float32
+    return MAPPINGS[text]

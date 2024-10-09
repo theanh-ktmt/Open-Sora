@@ -55,14 +55,14 @@ echo "DOUBLE_FRAMES=${DOUBLE_FRAMES}"
 echo "QUAD_FRAMES=${QUAD_FRAMES}"
 echo "OCT_FRAMES=${OCT_FRAMES}"
 
-CMD="python scripts/inference.py configs/opensora-v1-2/inference/sample.py"
+CMD="python scripts/inference.py configs/anhtt/inference.py"
 if [[ $CKPT == *"ema"* ]]; then
   parentdir=$(dirname $CKPT)
   CKPT_BASE=$(basename $parentdir)_ema
 else
   CKPT_BASE=$(basename $CKPT)
 fi
-OUTPUT="/mnt/jfs-hdd/sora/samples/samples_${MODEL_NAME}_${CKPT_BASE}"
+OUTPUT="save/eval/${MODEL_NAME}/generated_videos"
 start=$(date +%s)
 DEFAULT_BS=1
 

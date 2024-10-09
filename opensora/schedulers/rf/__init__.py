@@ -1,9 +1,15 @@
+import time
+
 import torch
+from torch.profiler import ProfilerActivity, profile, record_function
 from tqdm import tqdm
 
 from opensora.registry import SCHEDULERS
+from opensora.utils.misc import create_logger
 
 from .rectified_flow import RFlowScheduler, timestep_transform
+
+logger = create_logger()
 
 
 @SCHEDULERS.register_module("rflow")
@@ -42,14 +48,38 @@ class RFLOW:
         mask=None,
         guidance_scale=None,
         progress=True,
+        return_latencies=False,
     ):
+        latencies = {}
+
         # if no specific guidance scale is provided, use the default scale when initializing the scheduler
         if guidance_scale is None:
             guidance_scale = self.cfg_scale
 
         n = len(prompts)
-        # text encoding
+
+        # For profiling
+        start = time.time()
+        # with profile(
+        #     activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA],
+        #     # profile_memory=True,
+        #     record_shapes=True,
+        #     with_stack=True
+        # ) as prof:
+        #     with record_function("text_embedding"):
         model_args = text_encoder.encode(prompts)
+
+        # with open("save/profile/text_embedding.profile", "w") as f:
+        #     table = prof.key_averages(
+        #         group_by_input_shape=True
+        #     ).table(
+        #         sort_by="cuda_time_total",
+        #         row_limit=10000
+        #     )
+        #     f.write(str(table))
+        # prof.export_chrome_trace("save/profile/text_embedding.json")
+        latencies["text_encoder"] = time.time() - start
+
         y_null = text_encoder.null(n)
         model_args["y"] = torch.cat([model_args["y"], y_null], 0)
         if additional_args is not None:
@@ -68,6 +98,15 @@ class RFLOW:
             noise_added = noise_added | (mask == 1)
 
         progress_wrap = tqdm if progress else (lambda x: x)
+
+        latencies["backbone"] = 0
+        # For profiling
+        # with profile(
+        #     activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA],
+        #     # profile_memory=True,
+        #     record_shapes=True,
+        #     with_stack=True
+        # ) as prof:
         for i, t in progress_wrap(enumerate(timesteps)):
             # mask for adding noise
             if mask is not None:
@@ -85,7 +124,13 @@ class RFLOW:
             # classifier-free guidance
             z_in = torch.cat([z, z], 0)
             t = torch.cat([t, t], 0)
+
+            start = time.time()
+
+            # with record_function("video_generation"):
             pred = model(z_in, t, **model_args).chunk(2, dim=1)[0]
+            latencies["backbone"] += time.time() - start
+
             pred_cond, pred_uncond = pred.chunk(2, dim=0)
             v_pred = pred_uncond + guidance_scale * (pred_cond - pred_uncond)
 
@@ -97,6 +142,18 @@ class RFLOW:
             if mask is not None:
                 z = torch.where(mask_t_upper[:, None, :, None, None], z, x0)
 
+        # with open("save/profile/backbone.profile", "w") as f:
+        #     table = prof.key_averages(
+        #         group_by_input_shape=True
+        #     ).table(
+        #         sort_by="cuda_time_total",
+        #         row_limit=10000
+        #     )
+        #     f.write(str(table))
+        # prof.export_chrome_trace("save/profile/backbone.json")
+
+        if return_latencies:
+            return z, latencies
         return z
 
     def training_losses(self, model, x_start, model_kwargs=None, noise=None, mask=None, weights=None, t=None):

@@ -1,11 +1,17 @@
 import json
 import os
 import re
+import time
+from pathlib import Path
 
 import torch
+import torch.nn as nn
 
 from opensora.datasets import IMG_FPS
 from opensora.datasets.utils import read_from_path
+from opensora.utils.misc import create_logger
+
+logger = create_logger()
 
 
 def prepare_multi_resolution_info(info_type, batch_size, image_size, num_frames, fps, device, dtype):
@@ -83,20 +89,55 @@ def extract_json_from_prompts(prompts, reference, mask_strategy):
     return ret_prompts, reference, mask_strategy
 
 
-def collect_references_batch(reference_paths, vae, image_size):
+def collect_references_batch(
+    reference_paths,
+    vae,
+    image_size,
+    return_latencies=False,
+):
     refs_x = []  # refs_x: [batch, ref_num, C, T, H, W]
+    latencies = []
+
     for reference_path in reference_paths:
         if reference_path == "":
             refs_x.append([])
+            latencies.append(0)
             continue
+
         ref_path = reference_path.split(";")
         ref = []
+        latency = 0
         for r_path in ref_path:
             r = read_from_path(r_path, image_size, transform_name="resize_crop")
+
+            start = time.time()
+            # with profile(
+            #     activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA],
+            #     # profile_memory=True,
+            #     record_shapes=True,
+            #     with_stack=True
+            # ) as prof:
+            #     with record_function("image_embedding"):
             r_x = vae.encode(r.unsqueeze(0).to(vae.device, vae.dtype))
+            # with open("save/profile/image_embedding.profile", "w") as f:
+            #     table = prof.key_averages(
+            #         group_by_input_shape=True
+            #     ).table(
+            #         sort_by="cuda_time_total",
+            #         row_limit=10000
+            #     )
+            #     f.write(str(table))
+            # prof.export_chrome_trace("save/profile/image_embedding.json")
+            latency += time.time() - start
+
             r_x = r_x.squeeze(0)
             ref.append(r_x)
+
+        latencies.append(latency)
         refs_x.append(ref)
+
+    if return_latencies:
+        return refs_x, latencies
     return refs_x
 
 
@@ -320,3 +361,26 @@ def add_watermark(
     exit_code = os.system(cmd)
     is_success = exit_code == 0
     return is_success
+
+
+################ My utils ##################
+def log_model_arch(model: nn.Module, fpath: str):
+    path = Path(fpath)
+    path.parent.mkdir(parents=True, exist_ok=True)
+
+    with open(fpath, "w") as f:
+        f.write(str(model))
+
+
+def log_model_dtype(model: nn.Module, fpath: str):
+    path = Path(fpath)
+    path.parent.mkdir(parents=True, exist_ok=True)
+
+    with open(fpath, "w") as f:
+        for name, module in model.named_modules():
+            if hasattr(module, "weight") and module.weight is not None:
+                f.write(f"{name}.weight {module.weight.dtype}\n")
+            if hasattr(module, "bias") and module.bias is not None:
+                f.write(f"{name}.bias {module.bias.dtype}\n")
+            if not hasattr(module, "weight") and not hasattr(module, "bias"):
+                f.write(f"{name} No learnable parameters\n")

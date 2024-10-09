@@ -31,6 +31,9 @@ from opensora.models.layers.blocks import (
 )
 from opensora.registry import MODELS
 from opensora.utils.ckpt_utils import load_checkpoint
+from opensora.utils.misc import create_logger
+
+logger = create_logger()
 
 
 class STDiT3Block(nn.Module):
@@ -354,6 +357,7 @@ class STDiT3(PreTrainedModel):
 
     def forward(self, x, timestep, y, mask=None, x_mask=None, fps=None, height=None, width=None, **kwargs):
         dtype = self.x_embedder.proj.weight.dtype
+
         B = x.size(0)
         x = x.to(dtype)
         timestep = timestep.to(dtype)
@@ -419,9 +423,11 @@ class STDiT3(PreTrainedModel):
         x = rearrange(x, "B T S C -> B (T S) C", T=T, S=S)
 
         # === blocks ===
+        i = 0
         for spatial_block, temporal_block in zip(self.spatial_blocks, self.temporal_blocks):
             x = auto_grad_checkpoint(spatial_block, x, y, t_mlp, y_lens, x_mask, t0_mlp, T, S)
             x = auto_grad_checkpoint(temporal_block, x, y, t_mlp, y_lens, x_mask, t0_mlp, T, S)
+            i += 1
 
         if self.enable_sequence_parallelism:
             x = rearrange(x, "B (T S) C -> B T S C", T=T, S=S)
@@ -470,6 +476,7 @@ def STDiT3_XL_2(from_pretrained=None, **kwargs):
     if force_huggingface or from_pretrained is not None and not os.path.exists(from_pretrained):
         model = STDiT3.from_pretrained(from_pretrained, **kwargs)
     else:
+        print("Pretrained: {}".format(from_pretrained))
         config = STDiT3Config(depth=28, hidden_size=1152, patch_size=(1, 2, 2), num_heads=16, **kwargs)
         model = STDiT3(config)
         if from_pretrained is not None:

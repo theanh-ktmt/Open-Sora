@@ -3,6 +3,7 @@ import os
 import time
 
 import torch
+
 from vbench import VBench
 
 full_info_path = "eval/vbench/VBench_full_info.json"
@@ -37,7 +38,7 @@ dimensions = [
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("video_folder", type=str)  # samples/samples..._vbench/eval
-    parser.add_argument("model_ckpt", type=str)
+    # parser.add_argument("model_ckpt", type=str)
     parser.add_argument("--start", type=int, default=0)  # start index of dimension to be evaluated
     parser.add_argument("--end", type=int, default=-1)  # start index of dimension to be evaluated
 
@@ -47,7 +48,7 @@ def parse_args():
 
 if __name__ == "__main__":
     args = parse_args()
-    output_dir = os.path.join(args.model_ckpt, "vbench")
+    output_dir = os.path.join(os.path.dirname(args.video_folder), "results_vbench")
     os.makedirs(output_dir, exist_ok=True)
     video_path = args.video_folder
 
