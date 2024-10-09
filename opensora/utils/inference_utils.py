@@ -112,14 +112,20 @@ def collect_references_batch(
 
             start = time.time()
             # with profile(
-            #     activities=[ProfilerActivity.CUDA],
+            #     activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA],
             #     # profile_memory=True,
             #     record_shapes=True,
+            #     with_stack=True
             # ) as prof:
             #     with record_function("image_embedding"):
             r_x = vae.encode(r.unsqueeze(0).to(vae.device, vae.dtype))
             # with open("save/profile/image_embedding.profile", "w") as f:
-            #     table = prof.key_averages().table(sort_by="cuda_time_total", row_limit=100)
+            #     table = prof.key_averages(
+            #         group_by_input_shape=True
+            #     ).table(
+            #         sort_by="cuda_time_total",
+            #         row_limit=10000
+            #     )
             #     f.write(str(table))
             # prof.export_chrome_trace("save/profile/image_embedding.json")
             latency += time.time() - start

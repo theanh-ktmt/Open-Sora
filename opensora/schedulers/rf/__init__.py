@@ -59,28 +59,26 @@ class RFLOW:
         n = len(prompts)
 
         # For profiling
+        start = time.time()
         # with profile(
-        #     activities=[ProfilerActivity.CUDA],
+        #     activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA],
         #     # profile_memory=True,
         #     record_shapes=True,
+        #     with_stack=True
         # ) as prof:
         #     with record_function("text_embedding"):
-        #         model_args = text_encoder.encode(prompts)
+        model_args = text_encoder.encode(prompts)
+
         # with open("save/profile/text_embedding.profile", "w") as f:
-        #     table = prof.key_averages().table(sort_by="cuda_time_total", row_limit=100)
+        #     table = prof.key_averages(
+        #         group_by_input_shape=True
+        #     ).table(
+        #         sort_by="cuda_time_total",
+        #         row_limit=10000
+        #     )
         #     f.write(str(table))
         # prof.export_chrome_trace("save/profile/text_embedding.json")
-
-        start = time.time()
-        model_args = text_encoder.encode(prompts)
         latencies["text_encoder"] = time.time() - start
-
-        # text encoder don't have forward function
-        # if writer:
-        #     def text_encoder_wrapper(x):
-        #         return text_encoder.encode(x)
-        #     writer.add_graph(text_encoder_wrapper, prompts)
-        #     logger.info('Logged Text Encoder graph to Tensorboard.')
 
         y_null = text_encoder.null(n)
         model_args["y"] = torch.cat([model_args["y"], y_null], 0)
@@ -104,9 +102,10 @@ class RFLOW:
         latencies["backbone"] = 0
         # For profiling
         # with profile(
-        #     activities=[ProfilerActivity.CUDA],
+        #     activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA],
         #     # profile_memory=True,
         #     record_shapes=True,
+        #     with_stack=True
         # ) as prof:
         for i, t in progress_wrap(enumerate(timesteps)):
             # mask for adding noise
@@ -144,7 +143,12 @@ class RFLOW:
                 z = torch.where(mask_t_upper[:, None, :, None, None], z, x0)
 
         # with open("save/profile/backbone.profile", "w") as f:
-        #     table = prof.key_averages().table(sort_by="cuda_time_total", row_limit=100)
+        #     table = prof.key_averages(
+        #         group_by_input_shape=True
+        #     ).table(
+        #         sort_by="cuda_time_total",
+        #         row_limit=10000
+        #     )
         #     f.write(str(table))
         # prof.export_chrome_trace("save/profile/backbone.json")
 
