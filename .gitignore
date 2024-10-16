@@ -206,3 +206,4 @@ vbench2_beta_i2v
 # My ignore
 save
 tensorrt/resources
+*.save
