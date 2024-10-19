@@ -1,7 +1,19 @@
+import os
 from typing import Optional
 
 import torch
 import torch.nn.functional as F
+
+USE_XFORMERS: Optional[bool] = None
+
+
+def is_xformers_enabled() -> bool:
+    """Check if xformers is enabled or not."""
+    if USE_XFORMERS is not None:
+        return USE_XFORMERS
+
+    USE_XFORMERS = bool(os.environ.get("ENABLE_XFORMERS", "1"))
+    return USE_XFORMERS
 
 
 def memory_efficient_attention(
