@@ -363,6 +363,10 @@ class STDiT3(PreTrainedModel):
         timestep = timestep.to(dtype)
         y = y.to(dtype)
 
+        # HACK: For converting model to TensorRT with conditioning
+        if x_mask is not None and torch.all(x_mask == 0):
+            x_mask = None
+
         # === get pos embed ===
         _, _, Tx, Hx, Wx = x.size()
         T, H, W = self.get_dynamic_size(x)
