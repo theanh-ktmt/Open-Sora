@@ -3,6 +3,7 @@ from typing import Optional
 
 import torch
 import torch.nn.functional as F
+from loguru import logger
 
 ENABLE_XFORMERS: Optional[bool] = None
 
@@ -14,7 +15,7 @@ def is_xformers_enabled() -> bool:
         return ENABLE_XFORMERS
 
     ENABLE_XFORMERS = os.environ.get("ENABLE_XFORMERS", "1") == "1"
-    print("Enable xformers: {}".format(ENABLE_XFORMERS))
+    logger.info("Enable xformers: {}".format(ENABLE_XFORMERS))
 
     return ENABLE_XFORMERS
 
