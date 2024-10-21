@@ -1,5 +1,5 @@
 import os
-from typing import Optional
+from typing import List, Optional
 
 import torch
 import torch.nn.functional as F
@@ -65,3 +65,54 @@ def memory_efficient_attention(
 
     # Transpose back to [B, M, H, K]
     return attn.transpose(1, 2)
+
+
+def block_diagonal_mask(
+    q_seqlen: List[int],
+    kv_seqlen: List[int],
+    dtype: torch.dtype = torch.float32,
+    device: torch.device = torch.device("cpu"),
+) -> torch.Tensor:
+    """
+    Creates a block diagonal mask tensor for attention mechanisms.
+
+    Parameters:
+    -----------
+    q_seqlen : List[int]
+        A list containing the lengths of the query sequences for each batch.
+    kv_seqlen : List[int]
+        A list containing the lengths of the key/value sequences for each batch.
+    dtype : torch.dtype, optional
+        The data type of the mask tensor. Default is torch.float32.
+    device : torch.device, optional
+        The device on which the tensor is allocated. Default is CPU.
+
+    Returns:
+    --------
+    torch.Tensor
+        A tensor of shape (total_q_seqlen, total_kv_seqlen) where each block is filled with 0
+        and the rest is filled with -inf.
+
+    Raises:
+    -------
+    AssertionError
+        If the lengths of q_seqlen and kv_seqlen are not equal.
+    """
+
+    assert len(q_seqlen) == len(kv_seqlen), "Length of 'q_seqlen' and 'kv_seqlen' must be equal!"
+
+    total_q_seqlen = sum(q_seqlen)
+    total_kv_seqlen = sum(kv_seqlen)
+
+    # Initialize mask with -inf
+    mask = torch.full((total_q_seqlen, total_kv_seqlen), -float("inf"), dtype=dtype, device=device)
+
+    # Fill diagonal with 0
+    q_offset = 0
+    kv_offset = 0
+    for q_len, kv_len in zip(q_seqlen, kv_seqlen):
+        mask[q_offset : q_len + q_offset, kv_offset : kv_len + kv_offset] = 0
+        q_offset += q_len
+        kv_offset += kv_len
+
+    return mask

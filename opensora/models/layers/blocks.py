@@ -19,13 +19,18 @@ import torch.distributed as dist
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.utils.checkpoint
-import xformers.ops
 from einops import rearrange
 from timm.models.vision_transformer import Mlp
 
 from opensora.acceleration.communications import all_to_all, split_forward_gather_backward
 from opensora.acceleration.parallel_states import get_sequence_parallel_group
-from opensora.utils.xformers import is_xformers_enabled, memory_efficient_attention
+from opensora.utils.xformers import block_diagonal_mask, is_xformers_enabled, memory_efficient_attention
+
+# Import xformers optional
+enable_xformers = is_xformers_enabled()
+if enable_xformers:
+    import xformers.ops
+
 
 approx_gelu = lambda: nn.GELU(approximate="tanh")
 
@@ -315,8 +320,6 @@ class KVCompressAttention(nn.Module):
 
         q, k = self.q_norm(q), self.k_norm(k)
 
-        enable_xformers = is_xformers_enabled()
-
         if enable_flash_attn:
             from flash_attn import flash_attn_func
 
@@ -477,15 +480,12 @@ class MultiHeadCrossAttention(nn.Module):
         kv = self.kv_linear(cond).view(1, -1, 2, self.num_heads, self.head_dim)
         k, v = kv.unbind(2)
 
-        enable_xformers = is_xformers_enabled()
-
         attn_bias = None
         if mask is not None:
-            attn_bias = xformers.ops.fmha.BlockDiagonalMask.from_seqlens([N] * B, mask)
-            if not enable_xformers:
-                attn_bias = attn_bias.materialize(
-                    (1, self.num_heads, N * B, mask[0] * B), dtype=q.dtype, device=q.device
-                )
+            if enable_xformers:
+                attn_bias = xformers.ops.fmha.BlockDiagonalMask.from_seqlens([N] * B, mask)
+            else:
+                attn_bias = block_diagonal_mask([N] * B, mask, dtype=q.dtype, device=q.device)
 
         if enable_xformers:
             x = xformers.ops.memory_efficient_attention(q, k, v, p=self.attn_drop.p, attn_bias=attn_bias)
@@ -535,16 +535,13 @@ class SeqParallelMultiHeadCrossAttention(MultiHeadCrossAttention):
         k = k.view(1, -1, self.num_heads // sp_size, self.head_dim)
         v = v.view(1, -1, self.num_heads // sp_size, self.head_dim)
 
-        enable_xformers = is_xformers_enabled()
-
         # compute attention
         attn_bias = None
         if mask is not None:
-            attn_bias = xformers.ops.fmha.BlockDiagonalMask.from_seqlens([N] * B, mask)
-            if not enable_xformers:
-                attn_bias = attn_bias.materialize(
-                    (1, self.num_heads, N * B, mask[0] * B), dtype=q.dtype, device=q.device
-                )
+            if enable_xformers:
+                attn_bias = xformers.ops.fmha.BlockDiagonalMask.from_seqlens([N] * B, mask)
+            else:
+                attn_bias = block_diagonal_mask([N] * B, mask, dtype=q.dtype, device=q.device)
 
         if enable_xformers:
             x = xformers.ops.memory_efficient_attention(q, k, v, p=self.attn_drop.p, attn_bias=attn_bias)

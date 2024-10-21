@@ -1,19 +1,11 @@
 import itertools
 import unittest
 
-import parameterized
 import torch
 import torch.nn.functional
 import xformers.ops as xops
 
-from opensora.utils.xformers import memory_efficient_attention
-
-TENSOR_SHAPES = [
-    (8, 8, 64, 32),
-    (16, 16, 128, 64),
-    (32, 32, 128, 128),
-    (64, 64, 64, 64),
-]
+from opensora.utils.xformers import block_diagonal_mask, memory_efficient_attention
 
 
 # Helper functions
@@ -30,33 +22,64 @@ def generate_tensors(shape, device="cpu"):
     return query, key, value, attn_bias
 
 
-@parameterized.parameterized_class(("shape", "use_attn_bias"), itertools.product(TENSOR_SHAPES, [True, False]))
+# Test case for xformers equivalent functions
 class XformersTest(unittest.TestCase):
     def test_memory_efficient_attention(self):
-        # Fixed dropout to 0.0 -> reproducibility
-        p = 0.0
+        TENSOR_SHAPES = [
+            (8, 8, 64, 32),
+            (16, 16, 128, 64),
+            (32, 32, 128, 128),
+            (64, 64, 64, 64),
+        ]
 
-        # Generate QKV
-        query, key, value, attn_bias = generate_tensors(self.shape, device="cuda")
-        if not self.use_attn_bias:
-            attn_bias = None
+        for shape, use_attn_bias in itertools.product(TENSOR_SHAPES, [True, False]):
+            # Fixed dropout to 0.0 -> reproducibility
+            p = 0.0
 
-        # Outputs
-        xformers_output = xops.memory_efficient_attention(query, key, value, p=p, attn_bias=attn_bias)
-        alternative_output = memory_efficient_attention(query, key, value, p=p, attn_bias=attn_bias)
+            # Generate QKV
+            query, key, value, attn_bias = generate_tensors(shape, device="cuda")
+            if not use_attn_bias:
+                attn_bias = None
 
-        # Check shape
-        self.assertEqual(
-            xformers_output.shape,
-            alternative_output.shape,
-            "Output shape not matched! {} != {}".format(xformers_output.shape, alternative_output.shape),
-        )
+            # Outputs
+            xformers_output = xops.memory_efficient_attention(query, key, value, p=p, attn_bias=attn_bias)
+            alternative_output = memory_efficient_attention(query, key, value, p=p, attn_bias=attn_bias)
 
-        # Check equal
-        tolerance = 1e-6
-        absolute_difference = torch.abs(xformers_output - alternative_output)
-        max_absolute_difference = torch.max(absolute_difference).item()
-        self.assertTrue(
-            max_absolute_difference <= tolerance,
-            f"Maximum absolute difference ({max_absolute_difference}) exceeds the tolerance level ({tolerance})",
-        )
+            # Check shape
+            self.assertEqual(
+                xformers_output.shape,
+                alternative_output.shape,
+                "Output shape not matched! {} != {}".format(xformers_output.shape, alternative_output.shape),
+            )
+
+            # Check equal
+            tolerance = 1e-6
+            absolute_difference = torch.abs(xformers_output - alternative_output)
+            max_absolute_difference = torch.max(absolute_difference).item()
+            self.assertTrue(
+                max_absolute_difference <= tolerance,
+                f"Maximum absolute difference ({max_absolute_difference}) exceeds the tolerance level ({tolerance})",
+            )
+
+    def test_block_diagonal_mask(self):
+        DTYPE = torch.float32
+        DEVICE = torch.device("cpu")
+
+        Q_SEQLEN = [
+            [2] * 3,
+            [3] * 4,
+            [4] * 5,
+        ]
+        KV_SEQLEN = [[4] * 3, [8] * 4, [12] * 5]
+
+        for q_seqlen, kv_seqlen in zip(Q_SEQLEN, KV_SEQLEN):
+            # True output
+            xformers_output = xops.fmha.BlockDiagonalMask.from_seqlens(q_seqlen, kv_seqlen).materialize(
+                (sum(q_seqlen), sum(kv_seqlen)), DTYPE, DEVICE
+            )
+
+            # Alternative output
+            alternative_output = block_diagonal_mask(q_seqlen, kv_seqlen, DTYPE, DEVICE)
+
+            is_equal = torch.equal(xformers_output, alternative_output)
+            self.assertTrue(is_equal, "Outputs are not equal!")
