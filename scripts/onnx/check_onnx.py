@@ -73,6 +73,9 @@ height: {height.shape} {height.dtype}
 width: {width.shape} {width.dtype}"""
 )
 
+# ignore x_mask
+x_mask = None
+
 # TRUE OUTPUT
 logger.info("Running true inference...")
 start = time.time()
@@ -97,7 +100,7 @@ inputs = {
     "t_in": to_numpy(t_in),
     "y": to_numpy(y),
     "mask": to_numpy(mask),
-    "x_mask": to_numpy(x_mask),
+    # "x_mask": to_numpy(x_mask),
     "fps": to_numpy(fps),
     "height": to_numpy(height),
     "width": to_numpy(width),

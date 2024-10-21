@@ -1,21 +1,31 @@
+###
+### NOT WORKING
+### Dynamo not support conditioning
+### has to wrap all condition with torchfunctorch.experimental.control_flow.cond
+###
+
 import argparse
 import os
 import pprint
+import time
 
 import torch
+import torch_tensorrt
 from loguru import logger
 
 from opensora.registry import MODELS, build_module
 
 # Load argument
 parser = argparse.ArgumentParser()
-parser.add_argument("--onnx-path", type=str, default="save/onnx/ckpt/stdit3.onnx", help="Path to save ONNX file.")
+parser.add_argument("--trt-path", type=str, default="save/tensorrt/stdit3.onnx", help="Path to save TensorRT file.")
 parser.add_argument("--data-dir", type=str, default="save/onnx/data", help="Path to inputs and configs.")
 args = parser.parse_args()
 
+
 # Settings
 device = torch.device("cuda")
-dtype = torch.float32
+dtype = torch.float16
+os.makedirs(os.path.dirname(args.trt_path), exist_ok=True)
 
 
 # Build models
@@ -45,14 +55,14 @@ input_path = os.path.join(args.data_dir, "inputs.pth")
 logger.info("Loading inputs from {}...".format(input_path))
 inputs = torch.load(input_path, map_location=device)
 
-z_in = inputs["z_in"]
-t_in = inputs["t_in"]
-y = inputs["y"]
-mask = inputs["mask"]
-x_mask = inputs["x_mask"]
-fps = inputs["fps"]
-height = inputs["height"]
-width = inputs["width"]
+z_in = inputs["z_in"].to(dtype)
+t_in = inputs["t_in"].to(dtype)
+y = inputs["y"].to(dtype)
+mask = inputs["mask"].to(dtype)
+x_mask = inputs["x_mask"].to(dtype)
+fps = inputs["fps"].to(dtype)
+height = inputs["height"].to(dtype)
+width = inputs["width"].to(dtype)
 logger.info(
     f"""Inputs:
 z_in: {z_in.shape} {z_in.dtype}
@@ -65,48 +75,14 @@ height: {height.shape} {height.dtype}
 width: {width.shape} {width.dtype}"""
 )
 
-# Convert to ONNX
-logger.info("Exporting ONNX models...")
-dynamic_axes = {
-    "z_in": {
-        0: "2batchsize",
-        # 2: "frames",
-        # 3: "height",
-        # 4: "width",
-    },
-    "t_in": {
-        0: "2batchsize",
-    },
-    "y": {
-        0: "2batchsize",
-    },
-    "mask": {
-        0: "batchsize",
-    },
-    # "x_mask": {
-    #     0: "2batchsize",
-    #     # 1: "frames",
-    # },
-    "output": {
-        0: "2batchsize",
-    },
-}
+logger.info("Building TensorRT engine...")
+start = time.time()
+inputs = [z_in, t_in, y, mask, x_mask, fps, height, width]
 
-# ignore x_mask
-x_mask = None
-
-# input_names = ["z_in", "t_in", "y", "mask", "x_mask", "fps", "height", "width"]
-input_names = ["z_in", "t_in", "y", "mask", "fps", "height", "width"]
-inputs = (z_in, t_in, y, mask, x_mask, fps, height, width)
-output_names = ["output"]
-
-torch.onnx.export(
-    model,
-    inputs,
-    args.onnx_path,
-    export_params=True,
-    input_names=input_names,
-    output_names=output_names,
-    dynamic_axes=dynamic_axes,
-)
-logger.success("ONNX model saved at {}!".format(args.onnx_path))
+enabled_precisions = {torch.float, torch.half}  # Run with fp16
+trt_ts_module = torch_tensorrt.compile(model, inputs=inputs, enabled_precisions=enabled_precisions)
+inputs = inputs
+result = trt_ts_module(inputs)
+torch.jit.save(trt_ts_module, args.trt_path)
+logger.sucess("Saved TensorRT file to {}!".format(args.trt_gm))
+logger.info("Done after {:.2f}s!".format(time.time() - start))
