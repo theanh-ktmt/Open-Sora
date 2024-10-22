@@ -96,7 +96,7 @@ providers = [
         {
             # 'device_id': 2,                                                     # Select GPU to execute
             "trt_max_workspace_size": max_workspace_size * 1024 * 1024 * 1024,  # Set GPU memory usage limit
-            "trt_fp16_enable": True,  # Enable FP16 precision for faster inference
+            # "trt_fp16_enable": True,  # Enable FP16 precision for faster inference
         },
     ),
     (

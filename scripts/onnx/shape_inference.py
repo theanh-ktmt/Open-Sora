@@ -18,9 +18,9 @@ start = time.time()
 onnx.shape_inference.infer_shapes_path(
     args.input,
     args.output,
-    check_type=True,  # Check types during shape inference
-    strict_mode=True,  # Enforce stricter rules
-    data_prop=True,  # Perform data propagation
+    # check_type=True,  # Check types during shape inference
+    # strict_mode=True,  # Enforce stricter rules
+    # data_prop=True,  # Perform data propagation
 )
 logger.success("Done after {:.2f}s!".format(time.time() - start))
 logger.info("Saved new ONNX checkpoint to {}!".format(args.output))

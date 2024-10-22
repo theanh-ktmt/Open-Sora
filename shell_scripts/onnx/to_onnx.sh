@@ -1,5 +1,5 @@
 #!/bin/bash
-export CUDA_VISIBLE_DEVICES=0
+export CUDA_VISIBLE_DEVICES=2
 export ENABLE_XFORMERS=0
 export DATA_DIR=save/onnx/data
 export ONNX_PATH=save/onnx/ckpt/stdit3.onnx

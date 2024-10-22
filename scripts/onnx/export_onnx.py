@@ -108,6 +108,6 @@ torch.onnx.export(
     opset_version=13,
     input_names=input_names,
     output_names=output_names,
-    dynamic_axes=dynamic_axes,
+    dynamic_axes=None,
 )
 logger.success("ONNX model saved at {}!".format(args.onnx_path))
