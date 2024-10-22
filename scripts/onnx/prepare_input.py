@@ -126,6 +126,7 @@ model_args["y"].shape, model_args["mask"].shape
 n = len(prompts)
 y_null = text_encoder.null(n)
 model_args["y"] = torch.cat([model_args["y"], y_null], 0)
+model_args["mask"] = model_args["mask"].repeat(2, 1)
 
 # Prepare additional arguments
 additional_args = prepare_multi_resolution_info(multi_resolution, n, image_size, num_frames, fps, device, dtype)

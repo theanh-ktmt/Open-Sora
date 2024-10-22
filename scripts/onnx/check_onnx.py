@@ -88,11 +88,35 @@ logger.success("Done after {:.2f}s!".format(time.time() - start))
 logger.info("Running ONNX inference...")
 start = time.time()
 
+# Prepare for model execution
+max_workspace_size = 80  # GB
+providers = [
+    (
+        "TensorrtExecutionProvider",
+        {
+            # 'device_id': 2,                                                     # Select GPU to execute
+            "trt_max_workspace_size": max_workspace_size * 1024 * 1024 * 1024,  # Set GPU memory usage limit
+            "trt_fp16_enable": True,  # Enable FP16 precision for faster inference
+        },
+    ),
+    (
+        "CUDAExecutionProvider",
+        {
+            # 'device_id': 2,
+            "arena_extend_strategy": "kNextPowerOfTwo",
+            "gpu_mem_limit": max_workspace_size * 1024 * 1024 * 1024,
+            "cudnn_conv_algo_search": "EXHAUSTIVE",
+            "do_copy_in_default_stream": True,
+        },
+    ),
+]
+# providers = ['TensorrtExecutionProvider', 'CUDAExecutionProvider']
+
 # Load the ONNX model
-ort_session = ort.InferenceSession(
-    args.onnx_path,
-    # providers=['CUDAExecutionProvider']
-)
+sess_opt = ort.SessionOptions()
+sess_opt.log_severity_level = 1
+
+ort_session = ort.InferenceSession(args.onnx_path, sess_options=sess_opt, providers=providers)
 
 # Prepare the input dictionary
 inputs = {

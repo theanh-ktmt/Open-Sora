@@ -81,7 +81,7 @@ dynamic_axes = {
         0: "2batchsize",
     },
     "mask": {
-        0: "batchsize",
+        0: "2batchsize",
     },
     # "x_mask": {
     #     0: "2batchsize",
@@ -105,6 +105,7 @@ torch.onnx.export(
     inputs,
     args.onnx_path,
     export_params=True,
+    opset_version=13,
     input_names=input_names,
     output_names=output_names,
     dynamic_axes=dynamic_axes,

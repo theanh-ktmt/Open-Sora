@@ -56,12 +56,12 @@ def memory_efficient_attention(
     value = value.transpose(1, 2)
 
     # Calculate attention
-    attn = query @ key.transpose(-2, -1)
+    attn = torch.matmul(query, key.transpose(-2, -1))
     if attn_bias is not None:
         attn = attn + attn_bias
     attn = attn.softmax(-1)
     attn = F.dropout(attn, p)
-    attn = attn @ value
+    attn = torch.matmul(attn, value)
 
     # Transpose back to [B, M, H, K]
     return attn.transpose(1, 2)
