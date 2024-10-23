@@ -1,6 +1,6 @@
-resolution = "240p"
+resolution = "144p"
 aspect_ratio = "9:16"
-num_frames = 51
+num_frames = "2s"
 fps = 24
 frame_interval = 1
 save_fps = 24
@@ -9,7 +9,7 @@ save_dir = "./save/benchmark"
 seed = 42
 batch_size = 1
 multi_resolution = "STDiT2"
-dtype = "fp16"
+dtype = "fp32"
 condition_frame_length = 5
 align = 5
 
@@ -26,7 +26,12 @@ vae = dict(
     micro_frame_size=17,
     micro_batch_size=4,
 )
-text_encoder = dict(type="t5", from_pretrained="DeepFloyd/t5-v1_1-xxl", model_max_length=300, dtype=dtype)
+text_encoder = dict(
+    type="t5",
+    from_pretrained="DeepFloyd/t5-v1_1-xxl",
+    model_max_length=300,
+    # dtype=dtype
+)
 scheduler = dict(
     type="rflow",
     use_timestep_transform=True,

@@ -23,10 +23,12 @@ python scripts/onnx/shape_inference.py --input $ONNX_PATH --output $INFERRED_PAT
 end=$(date +%s)
 echo "Time taken: $(($end - $start)) seconds"
 
-echo "Checking ONNX outputs..."
+echo "Comparing ONNX outputs..."
 start=$(date +%s)
 python scripts/onnx/check_onnx.py --data-dir $DATA_DIR --onnx-path $INFERRED_PATH
 end=$(date +%s)
 echo "Time taken: $(($end - $start)) seconds"
+
+
 
 echo "Done!"

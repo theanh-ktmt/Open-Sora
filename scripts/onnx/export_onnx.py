@@ -92,11 +92,19 @@ dynamic_axes = {
     },
 }
 
-# ignore x_mask
+# ignore mask and x_mask
+mask = None
 x_mask = None
 
-# input_names = ["z_in", "t_in", "y", "mask", "x_mask", "fps", "height", "width"]
-input_names = ["z_in", "t_in", "y", "mask", "fps", "height", "width"]
+input_names = [
+    "z_in",
+    "t_in",
+    "y",
+    # "mask", "x_mask",
+    "fps",
+    "height",
+    "width",
+]
 inputs = (z_in, t_in, y, mask, x_mask, fps, height, width)
 output_names = ["output"]
 

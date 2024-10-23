@@ -19,6 +19,7 @@ def to_numpy(tensor):
 parser = argparse.ArgumentParser()
 parser.add_argument("--onnx-path", type=str, default="save/onnx/ckpt/stdit3.onnx", help="Path to save ONNX file.")
 parser.add_argument("--data-dir", type=str, default="save/onnx/data", help="Path to inputs and configs.")
+parser.add_argument("--cache-dir", type=str, default="save/onnx/cache", help="Path to cache directory")
 args = parser.parse_args()
 
 # Settings
@@ -47,6 +48,8 @@ model = (
     .eval()
 )
 logger.info("Model:\n{}".format(model))
+# for name, module in model.named_modules():
+#     logger.info(f"Layer {name}: {'Training' if module.training else 'Evaluation'}")
 
 # Unpack inputs
 input_path = os.path.join(args.data_dir, "inputs.pth")
@@ -73,7 +76,8 @@ height: {height.shape} {height.dtype}
 width: {width.shape} {width.dtype}"""
 )
 
-# ignore x_mask
+# ignore mask and x_mask
+mask = None
 x_mask = None
 
 # TRUE OUTPUT
@@ -89,20 +93,28 @@ logger.info("Running ONNX inference...")
 start = time.time()
 
 # Prepare for model execution
-max_workspace_size = 80  # GB
+max_workspace_size = 10  # GB
 providers = [
     (
         "TensorrtExecutionProvider",
-        {
-            # 'device_id': 2,                                                     # Select GPU to execute
+        {  # Select GPU to execute
             "trt_max_workspace_size": max_workspace_size * 1024 * 1024 * 1024,  # Set GPU memory usage limit
             # "trt_fp16_enable": True,  # Enable FP16 precision for faster inference
+            # Engine cache
+            "trt_engine_cache_enable": True,
+            "trt_engine_cache_path": "./",
+            # For embedding context
+            "trt_dump_ep_context_model": True,
+            "trt_ep_context_file_path": args.cache_dir,
+            # Timing cache
+            "trt_timing_cache_enable": True,
+            "trt_timing_cache_path": args.cache_dir,
+            "trt_force_timing_cache": True,
         },
     ),
     (
         "CUDAExecutionProvider",
         {
-            # 'device_id': 2,
             "arena_extend_strategy": "kNextPowerOfTwo",
             "gpu_mem_limit": max_workspace_size * 1024 * 1024 * 1024,
             "cudnn_conv_algo_search": "EXHAUSTIVE",
@@ -110,7 +122,6 @@ providers = [
         },
     ),
 ]
-# providers = ['TensorrtExecutionProvider', 'CUDAExecutionProvider']
 
 # Load the ONNX model
 sess_opt = ort.SessionOptions()
@@ -123,7 +134,7 @@ inputs = {
     "z_in": to_numpy(z_in),
     "t_in": to_numpy(t_in),
     "y": to_numpy(y),
-    "mask": to_numpy(mask),
+    # "mask": to_numpy(mask),
     # "x_mask": to_numpy(x_mask),
     "fps": to_numpy(fps),
     "height": to_numpy(height),
