@@ -82,6 +82,7 @@ class RFLOW:
 
         y_null = text_encoder.null(n)
         model_args["y"] = torch.cat([model_args["y"], y_null], 0)
+        model_args["mask"] = model_args["mask"].repeat(2, 1)
         if additional_args is not None:
             model_args.update(additional_args)
 

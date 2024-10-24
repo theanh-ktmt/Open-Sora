@@ -1,0 +1,4 @@
+onnx
+onnxruntime-gpu==1.18.0 --index-url https://aiinfra.pkgs.visualstudio.com/PublicPackages/_packaging/onnxruntime-cuda-12/pypi/simple/
+tensorrt==10.5.0 --extra-index-url https://pypi.nvidia.com
+loguru

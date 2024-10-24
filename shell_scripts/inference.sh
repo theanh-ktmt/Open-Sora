@@ -1,5 +1,5 @@
 #!/bin/bash
-CUDA_VISIBLE_DEVICES=1 \
+ENABLE_XFORMERS=0 CUDA_VISIBLE_DEVICES=2 \
 python3 scripts/inference.py configs/anhtt/inference.py \
   --num-frames 2s --resolution 144p --aspect-ratio 9:16 \
   --num-sampling-steps 30 --flow 5 --aes 6.5 \

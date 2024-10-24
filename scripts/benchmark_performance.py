@@ -16,6 +16,9 @@ from tqdm import tqdm
 from opensora.acceleration.parallel_states import set_sequence_parallel_group
 from opensora.datasets import save_sample
 from opensora.datasets.aspect import get_image_size, get_num_frames
+
+# For tensorRT
+from opensora.models.tensorrt.stdit3 import STDiT3TRT
 from opensora.models.text_encoder.t5 import text_preprocessing
 from opensora.registry import MODELS, SCHEDULERS, build_module
 from opensora.utils.config_utils import parse_configs
@@ -37,6 +40,7 @@ from opensora.utils.inference_utils import (
     split_prompt,
 )
 from opensora.utils.misc import create_logger, is_distributed, is_main_process, to_torch_dtype
+from opensora.utils.tensorrt import is_tensorrt_enabled
 
 VIDEO_GENERATION_PROMPTS = [
     "A day in the life of a busy city street from dawn to dusk.",
@@ -44,17 +48,30 @@ VIDEO_GENERATION_PROMPTS = [
     "An animation of a spaceship traveling through a colorful galaxy.",
     "A scenic drone flyover of a mountain range during sunset.",
     "A futuristic cityscape with flying cars and holographic advertisements.",
-    # "A short story about a robot exploring an abandoned warehouse.",
-    # "A fantasy world where dragons soar over castles and forests.",
-    # "A cooking tutorial showing how to make a delicious dessert step-by-step.",
-    # "A virtual tour of a famous historical landmark.",
-    # "A wildlife documentary featuring animals in their natural habitats."
+    "A short story about a robot exploring an abandoned warehouse.",
+    "A fantasy world where dragons soar over castles and forests.",
+    "A cooking tutorial showing how to make a delicious dessert step-by-step.",
+    "A virtual tour of a famous historical landmark.",
+    "A wildlife documentary featuring animals in their natural habitats.",
 ]
 
-VIDEO_REFERENCES = ["save/references/sample.jpg"] * len(VIDEO_GENERATION_PROMPTS)
+N_PROMPTS = 5
+VIDEO_GENERATION_PROMPTS = VIDEO_GENERATION_PROMPTS[:N_PROMPTS]
 
-VIDEO_RESOLUTIONS = ["144p", "240p", "360p", "480p", "720p"]
-VIDEO_LENGTHS = ["2s", "4s", "8s", "16s"]
+VIDEO_REFERENCES = ["save/references/sample.jpg"] * len(VIDEO_GENERATION_PROMPTS)
+VIDEO_RESOLUTIONS = [
+    "144p",
+    "240p",
+    "360p",
+    "480p",
+    "720p",
+]
+VIDEO_LENGTHS = [
+    "2s",
+    "4s",
+    "8s",
+    "16s",
+]
 ASPECT_RATIO = "9:16"
 BATCH_SIZE = 1
 
@@ -140,6 +157,7 @@ def main():
         # == build diffusion model ==
         input_size = (num_frames, *image_size)
         latent_size = vae.get_latent_size(input_size)
+
         model = (
             build_module(
                 cfg.model,
@@ -156,6 +174,14 @@ def main():
         text_encoder.y_embedder = model.y_embedder  # HACK: for classifier-free guidance
         log_model_arch(model, save_dir / "stdit" / "arch.log")
         log_model_dtype(model, save_dir / "stdit" / "dtype.log")
+
+        if is_tensorrt_enabled():
+            del model  # Remove old model
+
+            assert "STDiT3" in cfg.model.type, "Model '{}' is not supported by TensorRT at the moment.".format(
+                cfg.model.type
+            )
+            model = STDiT3TRT(cfg.trt_onnx_path, cfg.trt_cache_dir, fp16=False, max_workspace_size=10)
 
         # == build scheduler ==
         scheduler = build_module(cfg.scheduler, SCHEDULERS)
