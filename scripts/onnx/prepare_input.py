@@ -19,12 +19,18 @@ from opensora.utils.misc import to_torch_dtype
 # Load argument
 parser = argparse.ArgumentParser()
 parser.add_argument("--data-dir", type=str, default="save/onnx/data", help="Path to save data.")
+parser.add_argument("--resolution", type=str, default="144p", help="Output video resolution.")
+parser.add_argument("--duration", type=str, default="2s", help="Output video duration.")
+
 args = parser.parse_args()
 
+# Create save dir
+os.makedirs(args.data_dir, exist_ok=True)
+
 # Configs
-resolution = "144p"
+resolution = args.resolution
 aspect_ratio = "9:16"
-num_frames = "2s"
+num_frames = args.duration
 fps = 24
 frame_interval = 1
 save_fps = 24

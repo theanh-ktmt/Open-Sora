@@ -9,9 +9,15 @@ from opensora.registry import MODELS, build_module
 
 # Load argument
 parser = argparse.ArgumentParser()
-parser.add_argument("--onnx-path", type=str, default="save/onnx/ckpt/stdit3.onnx", help="Path to save ONNX file.")
-parser.add_argument("--data-dir", type=str, default="save/onnx/data", help="Path to inputs and configs.")
+parser.add_argument(
+    "--onnx-path", type=str, default="save/onnx/ckpts/144p-2s/stdit3.onnx", help="Path to save ONNX file."
+)
+parser.add_argument("--data-dir", type=str, default="save/onnx/data/144p-2s", help="Path to inputs and configs.")
 args = parser.parse_args()
+
+# Create save dir
+os.makedirs(os.path.dirname(args.onnx_path), exist_ok=True)
+
 
 # Settings
 device = torch.device("cuda")

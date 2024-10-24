@@ -16,10 +16,10 @@ device = "cuda"
 # Load argument
 parser = argparse.ArgumentParser()
 parser.add_argument(
-    "--onnx-path", type=str, default="save/onnx/ckpt/stdit3_inferred.onnx", help="Path to save ONNX file."
+    "--onnx-path", type=str, default="save/onnx/ckpts/144p-2s/stdit3_inferred.onnx", help="Path to save ONNX file."
 )
-parser.add_argument("--data-dir", type=str, default="save/onnx/data", help="Path to inputs and configs.")
-parser.add_argument("--cache-dir", type=str, default="save/onnx/cache", help="Path to cache directory")
+parser.add_argument("--data-dir", type=str, default="save/onnx/data/144p-2s", help="Path to inputs and configs.")
+parser.add_argument("--cache-dir", type=str, default="save/onnx/cache/144p-2s", help="Path to cache directory")
 args = parser.parse_args()
 
 input_path = os.path.join(args.data_dir, "inputs.pth")

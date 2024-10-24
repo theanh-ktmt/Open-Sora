@@ -6,9 +6,14 @@ from loguru import logger
 
 # Load argument
 parser = argparse.ArgumentParser()
-parser.add_argument("--input", type=str, default="save/onnx/ckpt/stdit3.onnx", help="Path to original ONNX file.")
 parser.add_argument(
-    "--output", type=str, default="save/onnx/ckpt/stdit3_inferred.onnx", help="Path to shape-inferred ONNX file."
+    "--input", type=str, default="save/onnx/ckpts/144p-2s/stdit3.onnx", help="Path to original ONNX file."
+)
+parser.add_argument(
+    "--output",
+    type=str,
+    default="save/onnx/ckpts/144p-2s/stdit3_inferred.onnx",
+    help="Path to shape-inferred ONNX file.",
 )
 args = parser.parse_args()
 
