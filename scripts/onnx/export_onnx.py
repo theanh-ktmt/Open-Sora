@@ -20,7 +20,7 @@ os.makedirs(os.path.dirname(args.onnx_path), exist_ok=True)
 
 
 # Settings
-device = torch.device("cpu")
+device = torch.device("cuda")
 dtype = torch.float32
 
 
@@ -119,7 +119,7 @@ torch.onnx.export(
     inputs,
     args.onnx_path,
     export_params=True,
-    opset_version=13,
+    opset_version=17,
     input_names=input_names,
     output_names=output_names,
     dynamic_axes=None,
