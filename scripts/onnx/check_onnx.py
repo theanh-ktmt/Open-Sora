@@ -103,8 +103,10 @@ max_workspace_size = 10  # GB
 providers = [
     (
         "TensorrtExecutionProvider",
-        {  # Select GPU to execute
+        {
+            "trt_detailed_build_log": True,
             "trt_max_workspace_size": max_workspace_size * 1024 * 1024 * 1024,
+            "trt_layer_norm_fp32_fallback": True,  # force Pow + Reduce ops in layer norm to FP32
             "trt_fp16_enable": args.fp16,
             # Engine cache
             "trt_engine_cache_enable": True,
