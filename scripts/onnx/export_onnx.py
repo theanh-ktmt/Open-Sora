@@ -114,14 +114,15 @@ input_names = [
 inputs = (z_in, t_in, y, mask, x_mask, fps, height, width)
 output_names = ["output"]
 
-torch.onnx.export(
-    model,
-    inputs,
-    args.onnx_path,
-    export_params=True,
-    opset_version=17,
-    input_names=input_names,
-    output_names=output_names,
-    dynamic_axes=None,
-)
+with torch.no_grad():
+    torch.onnx.export(
+        model,
+        inputs,
+        args.onnx_path,
+        export_params=True,
+        opset_version=17,
+        input_names=input_names,
+        output_names=output_names,
+        dynamic_axes=None,
+    )
 logger.success("ONNX model saved at {}!".format(args.onnx_path))
