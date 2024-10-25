@@ -22,6 +22,7 @@ parser.add_argument(
 )
 parser.add_argument("--data-dir", type=str, default="save/onnx/data/144p-2s", help="Path to inputs and configs.")
 parser.add_argument("--cache-dir", type=str, default="save/onnx/cache/144p-2s", help="Path to cache directory")
+parser.add_argument("--fp16", action="store_true", help="Enable FP16 precision")
 args = parser.parse_args()
 
 # Create save dir
@@ -103,8 +104,8 @@ providers = [
     (
         "TensorrtExecutionProvider",
         {  # Select GPU to execute
-            "trt_max_workspace_size": max_workspace_size * 1024 * 1024 * 1024,  # Set GPU memory usage limit
-            # "trt_fp16_enable": True,  # Enable FP16 precision for faster inference
+            "trt_max_workspace_size": max_workspace_size * 1024 * 1024 * 1024,
+            "trt_fp16_enable": args.fp16,
             # Engine cache
             "trt_engine_cache_enable": True,
             "trt_engine_cache_path": "./",

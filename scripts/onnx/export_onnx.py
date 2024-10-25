@@ -86,9 +86,9 @@ dynamic_axes = {
     "y": {
         0: "2batchsize",
     },
-    "mask": {
-        0: "2batchsize",
-    },
+    # "mask": {
+    #     0: "2batchsize",
+    # },
     # "x_mask": {
     #     0: "2batchsize",
     #     # 1: "frames",

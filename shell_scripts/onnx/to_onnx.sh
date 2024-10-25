@@ -1,15 +1,18 @@
 #!/bin/bash
 
 # Set default values if not provided
-RESOLUTION=${1:-"144p"}
-DURATION=${2:-"2s"}
+GPU=${1:-0}
+RESOLUTION=${2:-"144p"}
+DURATION=${3:-"2s"}
+DTYPE=${4:-"fp32"}
 
 # Set environment variables
-export CUDA_VISIBLE_DEVICES=2
+export CUDA_VISIBLE_DEVICES=$GPU
 export ENABLE_XFORMERS=0
 export DATA_DIR="save/onnx/data/${RESOLUTION}-${DURATION}"
 export ONNX_PATH="save/onnx/ckpts/${RESOLUTION}-${DURATION}/stdit3.onnx"
 export INFERRED_PATH="save/onnx/ckpts/${RESOLUTION}-${DURATION}/stdit3_inferred.onnx"
+export CACHE_DIR="save/onnx/cache/${RESOLUTION}-${DURATION}-${DTYPE}"
 
 # Function to measure time taken for a command
 measure_time() {
@@ -19,7 +22,7 @@ measure_time() {
     echo "Time taken: $((end - start)) seconds"
 }
 
-# Main script execution
+# Run ONNX on FP32
 echo "Preparing input..."
 measure_time python scripts/onnx/prepare_input.py --data-dir "$DATA_DIR"
 
@@ -29,7 +32,15 @@ measure_time python scripts/onnx/export_onnx.py --data-dir "$DATA_DIR" --onnx-pa
 echo "Shape Inference ONNX architecture..."
 measure_time python scripts/onnx/shape_inference.py --input "$ONNX_PATH" --output "$INFERRED_PATH"
 
+# Run TensorRT with desired precision
 echo "Comparing ONNX outputs..."
-measure_time python scripts/onnx/check_onnx.py --data-dir "$DATA_DIR" --onnx-path "$INFERRED_PATH"
+CMD="measure_time python scripts/onnx/check_onnx.py \
+    --data-dir \"$DATA_DIR\" \
+    --onnx-path \"$INFERRED_PATH\" \
+    --cache-dir \"$CACHE_DIR\""
+if [ "$DTYPE" == "fp16" ]; then
+    CMD+=" --fp16"
+fi
+eval $CMD
 
 echo "Done!"
