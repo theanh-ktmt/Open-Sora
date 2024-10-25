@@ -20,7 +20,7 @@ os.makedirs(os.path.dirname(args.onnx_path), exist_ok=True)
 
 
 # Settings
-device = torch.device("cuda")
+device = torch.device("cpu")
 dtype = torch.float32
 
 
