@@ -55,6 +55,7 @@ class STDiT3TRT:
     def get_providers(self) -> List[Tuple[Any]]:
         trt_opts = {
             "trt_fp16_enable": self.fp16,
+            "trt_layer_norm_fp32_fallback": True,  # force Pow + Reduce ops in layer norm to FP32
             "trt_max_workspace_size": self.max_workspace_size * 1024 * 1024 * 1024,  # in bytes
             "trt_detailed_build_log": True,
             # Engine cache
