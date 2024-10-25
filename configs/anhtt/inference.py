@@ -9,7 +9,7 @@ save_dir = "/home/tran/workspace/Open-Sora/save/inference/test"
 seed = 42
 batch_size = 1
 multi_resolution = "STDiT2"
-dtype = "fp16"
+dtype = "fp32"
 condition_frame_length = 5
 align = 5
 

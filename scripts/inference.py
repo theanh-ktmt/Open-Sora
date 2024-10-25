@@ -12,6 +12,9 @@ from tqdm import tqdm
 from opensora.acceleration.parallel_states import set_sequence_parallel_group
 from opensora.datasets import save_sample
 from opensora.datasets.aspect import get_image_size, get_num_frames
+
+# For tensorRT
+from opensora.models.tensorrt.stdit3 import STDiT3TRT
 from opensora.models.text_encoder.t5 import text_preprocessing
 from opensora.registry import MODELS, SCHEDULERS, build_module
 from opensora.utils.config_utils import parse_configs
@@ -32,6 +35,7 @@ from opensora.utils.inference_utils import (
     split_prompt,
 )
 from opensora.utils.misc import all_exists, create_logger, is_distributed, is_main_process, to_torch_dtype
+from opensora.utils.tensorrt import is_tensorrt_enabled
 
 
 def main():
@@ -104,6 +108,14 @@ def main():
         .eval()
     )
     text_encoder.y_embedder = model.y_embedder  # HACK: for classifier-free guidance
+
+    if is_tensorrt_enabled():
+        del model  # Remove old model
+
+        assert "STDiT3" in cfg.model.type, "Model '{}' is not supported by TensorRT at the moment.".format(
+            cfg.model.type
+        )
+        model = STDiT3TRT(cfg.trt_onnx_path, cfg.trt_cache_dir, fp16=False, max_workspace_size=10)
 
     # == build scheduler ==
     scheduler = build_module(cfg.scheduler, SCHEDULERS)

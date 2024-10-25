@@ -17,10 +17,16 @@ def to_numpy(tensor):
 
 # Load argument
 parser = argparse.ArgumentParser()
-parser.add_argument("--onnx-path", type=str, default="save/onnx/ckpt/stdit3.onnx", help="Path to save ONNX file.")
-parser.add_argument("--data-dir", type=str, default="save/onnx/data", help="Path to inputs and configs.")
-parser.add_argument("--cache-dir", type=str, default="save/onnx/cache", help="Path to cache directory")
+parser.add_argument(
+    "--onnx-path", type=str, default="save/onnx/ckpts/144p-2s/stdit3.onnx", help="Path to save ONNX file."
+)
+parser.add_argument("--data-dir", type=str, default="save/onnx/data/144p-2s", help="Path to inputs and configs.")
+parser.add_argument("--cache-dir", type=str, default="save/onnx/cache/144p-2s", help="Path to cache directory")
+parser.add_argument("--fp16", action="store_true", help="Enable FP16 precision")
 args = parser.parse_args()
+
+# Create save dir
+os.makedirs(os.path.dirname(args.cache_dir), exist_ok=True)
 
 # Settings
 device = torch.device("cuda")
@@ -98,8 +104,8 @@ providers = [
     (
         "TensorrtExecutionProvider",
         {  # Select GPU to execute
-            "trt_max_workspace_size": max_workspace_size * 1024 * 1024 * 1024,  # Set GPU memory usage limit
-            # "trt_fp16_enable": True,  # Enable FP16 precision for faster inference
+            "trt_max_workspace_size": max_workspace_size * 1024 * 1024 * 1024,
+            "trt_fp16_enable": args.fp16,
             # Engine cache
             "trt_engine_cache_enable": True,
             "trt_engine_cache_path": "./",
