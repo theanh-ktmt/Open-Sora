@@ -32,6 +32,8 @@ class STDiT3TRT:
             logger.info("Cache dir: {}".format(self.cache_dir))
 
             self.fp16 = fp16
+            if self.fp16:
+                logger.info("TensorRT FP16 is enabled!")
             self.max_workspace_size = max_workspace_size
 
             # Create session
@@ -47,9 +49,7 @@ class STDiT3TRT:
         # sess_opt.graph_optimization_level = ort.GraphOptimizationLevel.ORT_DISABLE_ALL
 
         providers = self.get_providers()
-
         session = ort.InferenceSession(self.onnx_path, sess_options=sess_opt, providers=providers)
-
         return session
 
     def get_providers(self) -> List[Tuple[Any]]:
