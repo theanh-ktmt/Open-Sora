@@ -36,6 +36,7 @@ from opensora.utils.inference_utils import (
 )
 from opensora.utils.misc import all_exists, create_logger, is_distributed, is_main_process, to_torch_dtype
 from opensora.utils.tensorrt import is_tensorrt_enabled
+from opensora.utils.torchcompile import compile_module, is_torch_compile_enabled
 
 
 def main():
@@ -108,6 +109,13 @@ def main():
         .eval()
     )
     text_encoder.y_embedder = model.y_embedder  # HACK: for classifier-free guidance
+
+    if is_torch_compile_enabled():
+        logger.info("torch.compile is enabled. Run compilling...")
+        text_encoder.t5.model = compile_module(text_encoder.t5.model)
+        vae = compile_module(vae)
+        model = compile_module(model)
+        logger.info("Compiling done!")
 
     if is_tensorrt_enabled():
         del model  # Remove old model

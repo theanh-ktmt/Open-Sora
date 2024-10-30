@@ -9,7 +9,7 @@ save_dir = "./save/benchmark"
 seed = 42
 batch_size = 1
 multi_resolution = "STDiT2"
-dtype = "fp32"
+dtype = "fp16"
 condition_frame_length = 5
 align = 5
 
@@ -18,7 +18,7 @@ model = dict(
     from_pretrained="hpcai-tech/OpenSora-STDiT-v3",
     qk_norm=True,
     enable_flash_attn=True,
-    enable_layernorm_kernel=True,
+    enable_layernorm_kernel=False,
 )
 vae = dict(
     type="OpenSoraVAE_V1_2",
