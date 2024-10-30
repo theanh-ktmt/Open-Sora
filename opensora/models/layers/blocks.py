@@ -483,7 +483,7 @@ class MultiHeadCrossAttention(nn.Module):
         attn_bias = None
         if mask is not None:
             if enable_xformers:
-                attn_bias = xformers.ops.fmha.BlockDiagonalMask.from_seqlens([N] * B, mask)
+                attn_bias = xformers.ops.fmha.attn_bias.BlockDiagonalMask.from_seqlens([N] * B, mask)
             else:
                 attn_bias = block_diagonal_mask([N] * B, mask, dtype=q.dtype, device=q.device)
 
@@ -539,7 +539,7 @@ class SeqParallelMultiHeadCrossAttention(MultiHeadCrossAttention):
         attn_bias = None
         if mask is not None:
             if enable_xformers:
-                attn_bias = xformers.ops.fmha.BlockDiagonalMask.from_seqlens([N] * B, mask)
+                attn_bias = xformers.ops.fmha.attn_bias.BlockDiagonalMask.from_seqlens([N] * B, mask)
             else:
                 attn_bias = block_diagonal_mask([N] * B, mask, dtype=q.dtype, device=q.device)
 

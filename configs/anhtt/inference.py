@@ -9,7 +9,7 @@ save_dir = "/home/tran/workspace/Open-Sora/save/inference/test"
 seed = 42
 batch_size = 1
 multi_resolution = "STDiT2"
-dtype = "fp32"
+dtype = "fp16"
 condition_frame_length = 5
 align = 5
 
@@ -18,7 +18,7 @@ model = dict(
     from_pretrained="hpcai-tech/OpenSora-STDiT-v3",
     qk_norm=True,
     enable_flash_attn=True,
-    enable_layernorm_kernel=True,
+    enable_layernorm_kernel=False,
 )
 vae = dict(
     type="OpenSoraVAE_V1_2",
@@ -26,7 +26,12 @@ vae = dict(
     micro_frame_size=17,
     micro_batch_size=4,
 )
-text_encoder = dict(type="t5", from_pretrained="DeepFloyd/t5-v1_1-xxl", model_max_length=300, dtype=dtype)
+text_encoder = dict(
+    type="t5",
+    # dtype=dtype,
+    from_pretrained="DeepFloyd/t5-v1_1-xxl",
+    model_max_length=300,
+)
 scheduler = dict(
     type="rflow",
     use_timestep_transform=True,
