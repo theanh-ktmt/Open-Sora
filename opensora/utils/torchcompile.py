@@ -23,8 +23,8 @@ def is_torch_compile_enabled() -> bool:
 def compile_module(module: nn.Module, configs: Optional[Dict[str, Any]] = None):
     """Implement torch.compile for an nn.Module."""
     DEFAULT_CONFIGS = {
-        "fullgraph": True,
-        "mode": "max-autotune",
+        # "fullgraph": False,
+        # "mode": "max-autotune",
     }
     configs = DEFAULT_CONFIGS if configs is None else configs
     return torch.compile(module, **configs)
