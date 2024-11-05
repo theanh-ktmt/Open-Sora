@@ -4,7 +4,6 @@ import numpy as np
 import torch
 import torch.distributed as dist
 import torch.nn as nn
-import torch.nn.functional as F
 from einops import rearrange
 from rotary_embedding_torch import RotaryEmbedding
 from timm.models.layers import DropPath
@@ -355,34 +354,12 @@ class STDiT3(PreTrainedModel):
             y = y.squeeze(1).view(1, -1, self.hidden_size)
         return y, y_lens
 
-    def forward(self, x, timestep, y, mask=None, x_mask=None, fps=None, height=None, width=None, **kwargs):
-        dtype = self.x_embedder.proj.weight.dtype
-
+    def forward(self, x, timestep, y, y_lens, x_mask=None, fps=None, height=None, width=None, **kwargs):
         B = x.size(0)
-        x = x.to(dtype)
-        timestep = timestep.to(dtype)
-        y = y.to(dtype)
 
         # === get pos embed ===
         _, _, Tx, Hx, Wx = x.size()
         T, H, W = self.get_dynamic_size(x)
-
-        # adjust for sequence parallelism
-        # we need to ensure H * W is divisible by sequence parallel size
-        # for simplicity, we can adjust the height to make it divisible
-        if self.enable_sequence_parallelism:
-            sp_size = dist.get_world_size(get_sequence_parallel_group())
-            if H % sp_size != 0:
-                h_pad_size = sp_size - H % sp_size
-            else:
-                h_pad_size = 0
-
-            if h_pad_size > 0:
-                hx_pad_size = h_pad_size * self.patch_size[1]
-
-                # pad x along the H dimension
-                H += h_pad_size
-                x = F.pad(x, (0, 0, 0, hx_pad_size))
 
         S = torch.tensor(H * W)
         base_size = torch.round(S**0.5)
@@ -403,12 +380,7 @@ class STDiT3(PreTrainedModel):
             t0_mlp = self.t_block(t0)
 
         # === get y embed ===
-        if self.config.skip_y_embedder:
-            y_lens = mask
-            if isinstance(y_lens, torch.Tensor):
-                y_lens = y_lens.long().tolist()
-        else:
-            y, y_lens = self.encode_text(y, mask)
+        # y, y_lens = self.encode_text(y, mask)
 
         # === get x embed ===
         x = self.x_embedder(x)  # [B, N, C]
