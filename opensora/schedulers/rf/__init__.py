@@ -1,13 +1,16 @@
 import time
 
 import torch
+import torch.nn.functional as F
 from torch.profiler import ProfilerActivity, profile, record_function
 from tqdm import tqdm
 
 from opensora.registry import SCHEDULERS
 from opensora.schedulers.rf.rectified_flow import RFlowScheduler, timestep_transform
+from opensora.utils.kv_correct import prepare_kv_correct
 from opensora.utils.misc import create_logger
 from opensora.utils.profile import get_profiling_status
+from opensora.utils.xformers import block_diagonal_mask
 
 logger = create_logger()
 
@@ -40,24 +43,58 @@ class RFLOW:
         self.model = None
         self.text_encoder = None
 
-    def encode_text(self, y, mask=None):
+    def encode_text(self, y, mask=None, training=False, hidden_size=1152):
         """Simple text encoding to bypass OpenSora text encoder.
 
         Returns:
             y (torch.tensor): Text embedding, padded with 0 to len 300.
             y_lens: Usually [300, 300].
         """
-        # # (2, 1, 300, 1152)
-        # y = self.text_encoder.y_embedder(y, self.model.training) # training=False
+        # Original
+        # return self.model.encode_text(y, mask)
 
-        # # Set all pad value to 0
-        # num_tokens = mask.sum(dim=1).tolist()[0] # [21]
-        # y[:, :, num_tokens:, :] = 0
+        # Alternative: not depends on model
+        y = self.text_encoder.y_embedder(y, training)  # (2, 1, 300, 1152)
 
-        # y_lens = [y.shape[2]] * y.shape[0] # [300, 300]
-        # y = y.squeeze(1).view(1, -1, self.model.hidden_size) # (1, 600, 1152)
-        # return y, y_lens
-        return self.model.encode_text(y, mask)
+        # Set all pad value to 0
+        num_tokens = mask.sum(dim=1).tolist()[0]  # [21]
+        y[:, :, num_tokens:, :] = 0
+
+        y_lens = [y.shape[2]] * y.shape[0]  # [300, 300]
+        y = y.squeeze(1).view(1, -1, hidden_size)  # (1, 600, 1152)
+        return y, y_lens
+
+    def get_dynamic_size(self, x, patch_size=(1, 2, 2)):
+        _, _, T, H, W = x.size()
+        if T % patch_size[0] != 0:
+            T += patch_size[0] - T % patch_size[0]
+        if H % patch_size[1] != 0:
+            H += patch_size[1] - H % patch_size[1]
+        if W % patch_size[2] != 0:
+            W += patch_size[2] - W % patch_size[2]
+        T = T // patch_size[0]
+        H = H // patch_size[1]
+        W = W // patch_size[2]
+        return (T, H, W)
+
+    def prepare_crossattn_bias(self, input, mask, y_lens, dtype, device):
+        """Pre-compute the bias for cross attention module."""
+        T, H, W = self.get_dynamic_size(input)
+        B = len(y_lens)
+
+        # Prepare block diagonal mask
+        config_size = T * H * W  # 2160
+        num_tokens = mask.sum(dim=1).tolist()[0]  # 21
+        # return block_diagonal_mask([config_size] * B, y_lens, dtype, device)
+
+        # shape: (2 * config_size, 2 * num_tokens)
+        attn_bias = block_diagonal_mask([config_size] * B, [num_tokens] * B, dtype, device)
+
+        # pad attn_bias with -inf to shape of (2 * config_size, sum(y_lens))
+        padded_len = int(sum(y_lens) - B * num_tokens)
+        attn_bias = F.pad(attn_bias, (0, padded_len), mode="constant", value=-float("inf"))
+
+        return attn_bias
 
     def sample(
         self,
@@ -76,6 +113,7 @@ class RFLOW:
         dtype = model.x_embedder.proj.weight.dtype
         self.model = model
         self.text_encoder = text_encoder
+        hidden_size = 1152
 
         # if no specific guidance scale is provided, use the default scale when initializing the scheduler
         if guidance_scale is None:
@@ -90,8 +128,14 @@ class RFLOW:
         y_null = text_encoder.null(n)
         model_args["y"] = torch.cat([model_args["y"], y_null], 0).to(dtype)
 
-        model_args["y"], model_args["y_lens"] = self.encode_text(**model_args)
-        del model_args["mask"]
+        # Pre-compute y, y_lens
+        model_args["y"], y_lens = self.encode_text(hidden_size=1152, **model_args)
+        # Prepare cross-attn bias
+        model_args["attn_bias"] = self.prepare_crossattn_bias(z, model_args["mask"], y_lens, dtype, device)
+        # Prepare kv-correctness
+        prepare_kv_correct(
+            model_args["mask"], dtype=dtype, device=device, hidden_size=hidden_size, ckpt_dir="save/weights"
+        )
 
         if additional_args is not None:
             model_args.update(additional_args)

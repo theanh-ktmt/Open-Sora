@@ -48,8 +48,10 @@ class STDiT3Block(nn.Module):
         enable_flash_attn=False,
         enable_layernorm_kernel=False,
         enable_sequence_parallelism=False,
+        block_index=0,
     ):
         super().__init__()
+        self.block_index = block_index
         self.temporal = temporal
         self.hidden_size = hidden_size
         self.enable_flash_attn = enable_flash_attn
@@ -71,7 +73,9 @@ class STDiT3Block(nn.Module):
             rope=rope,
             enable_flash_attn=enable_flash_attn,
         )
-        self.cross_attn = mha_cls(hidden_size, num_heads)
+        self.cross_attn = mha_cls(
+            hidden_size, num_heads, name="{}.{}".format("temporal" if temporal else "spatial", self.block_index)
+        )
         self.norm2 = get_layernorm(hidden_size, eps=1e-6, affine=False, use_kernel=enable_layernorm_kernel)
         self.mlp = Mlp(
             in_features=hidden_size, hidden_features=int(hidden_size * mlp_ratio), act_layer=approx_gelu, drop=0
@@ -94,7 +98,7 @@ class STDiT3Block(nn.Module):
         x,
         y,
         t,
-        mask=None,  # text mask
+        attn_bias=None,  # cross attn bias
         x_mask=None,  # temporal mask
         t0=None,  # t with timestamp=0
         T=None,  # number of frames
@@ -136,7 +140,7 @@ class STDiT3Block(nn.Module):
         x = x + self.drop_path(x_m_s)
 
         # cross attention
-        x = x + self.cross_attn(x, y, mask)
+        x = x + self.cross_attn(x, y, attn_bias)
 
         # modulate (MLP)
         x_m = t2i_modulate(self.norm2(x), shift_mlp, scale_mlp)
@@ -265,6 +269,7 @@ class STDiT3(PreTrainedModel):
                     enable_flash_attn=config.enable_flash_attn,
                     enable_layernorm_kernel=config.enable_layernorm_kernel,
                     enable_sequence_parallelism=config.enable_sequence_parallelism,
+                    block_index=i,
                 )
                 for i in range(config.depth)
             ]
@@ -283,6 +288,7 @@ class STDiT3(PreTrainedModel):
                     enable_flash_attn=config.enable_flash_attn,
                     enable_layernorm_kernel=config.enable_layernorm_kernel,
                     enable_sequence_parallelism=config.enable_sequence_parallelism,
+                    block_index=i,
                     # temporal
                     temporal=True,
                     rope=self.rope.rotate_queries_or_keys,
@@ -354,7 +360,7 @@ class STDiT3(PreTrainedModel):
             y = y.squeeze(1).view(1, -1, self.hidden_size)
         return y, y_lens
 
-    def forward(self, x, timestep, y, y_lens, x_mask=None, fps=None, height=None, width=None, **kwargs):
+    def forward(self, x, timestep, y, x_mask=None, attn_bias=None, fps=None, height=None, width=None, **kwargs):
         B = x.size(0)
 
         # === get pos embed ===
@@ -397,8 +403,8 @@ class STDiT3(PreTrainedModel):
         # === blocks ===
         i = 0
         for spatial_block, temporal_block in zip(self.spatial_blocks, self.temporal_blocks):
-            x = auto_grad_checkpoint(spatial_block, x, y, t_mlp, y_lens, x_mask, t0_mlp, T, S)
-            x = auto_grad_checkpoint(temporal_block, x, y, t_mlp, y_lens, x_mask, t0_mlp, T, S)
+            x = auto_grad_checkpoint(spatial_block, x, y, t_mlp, attn_bias, x_mask, t0_mlp, T, S)
+            x = auto_grad_checkpoint(temporal_block, x, y, t_mlp, attn_bias, x_mask, t0_mlp, T, S)
             i += 1
 
         if self.enable_sequence_parallelism:

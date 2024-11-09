@@ -24,6 +24,7 @@ from timm.models.vision_transformer import Mlp
 
 from opensora.acceleration.communications import all_to_all, split_forward_gather_backward
 from opensora.acceleration.parallel_states import get_sequence_parallel_group
+from opensora.utils.kv_correct import get_kv_correct
 from opensora.utils.xformers import block_diagonal_mask, is_xformers_enabled, memory_efficient_attention
 
 # Import xformers optional
@@ -458,9 +459,11 @@ class SeqParallelAttention(Attention):
 
 
 class MultiHeadCrossAttention(nn.Module):
-    def __init__(self, d_model, num_heads, attn_drop=0.0, proj_drop=0.0):
+    def __init__(self, d_model, num_heads, attn_drop=0.0, proj_drop=0.0, name=None):
         super(MultiHeadCrossAttention, self).__init__()
         assert d_model % num_heads == 0, "d_model must be divisible by num_heads"
+
+        self.name = name
 
         self.d_model = d_model
         self.num_heads = num_heads
@@ -472,30 +475,31 @@ class MultiHeadCrossAttention(nn.Module):
         self.proj = nn.Linear(d_model, d_model)
         self.proj_drop = nn.Dropout(proj_drop)
 
-    def forward(self, x, cond, mask=None):
+    def forward(self, x, cond, attn_bias=None):
         # query/value: img tokens; key: condition; mask: if padding tokens
         B, N, C = x.shape
-
         q = self.q_linear(x).view(1, -1, self.num_heads, self.head_dim)
-        kv = self.kv_linear(cond).view(1, -1, 2, self.num_heads, self.head_dim)
+        kv = self.kv_linear(cond)
+
+        # Correct the bias error
+        type_, index = self.name.split(".")
+        index = int(index)
+        kv += get_kv_correct(index, temporal=type_ == "temporal")  # Subtract bias from padding
+        kv = kv.view(1, -1, 2, self.num_heads, self.head_dim)
         k, v = kv.unbind(2)
 
-        attn_bias = None
-        if mask is not None:
-            if enable_xformers:
-                attn_bias = xformers.ops.fmha.attn_bias.BlockDiagonalMask.from_seqlens([N] * B, mask)
-            else:
-                attn_bias = block_diagonal_mask([N] * B, mask, dtype=q.dtype, device=q.device)
-
-        if enable_xformers:
-            x = xformers.ops.memory_efficient_attention(q, k, v, p=self.attn_drop.p, attn_bias=attn_bias)
-        else:
-            x = memory_efficient_attention(q, k, v, p=self.attn_drop.p, attn_bias=attn_bias)
+        # Calculate cross attn
+        x = memory_efficient_attention(q, k, v, p=self.attn_drop.p, attn_bias=attn_bias)
 
         # normal tensor is not contiguous for view function
-        x = x.view(B, -1, C) if enable_xformers else x.reshape(B, -1, C)
+        x = x.reshape(B, -1, C)
         x = self.proj(x)
         x = self.proj_drop(x)
+
+        if type_ == "temporal":
+            torch.save(x, f"temporal_.{index}.pth")
+        else:
+            torch.save(x, f"spatial_.{index}.pth")
         return x
 
 
