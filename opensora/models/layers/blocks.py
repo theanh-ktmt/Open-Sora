@@ -495,11 +495,6 @@ class MultiHeadCrossAttention(nn.Module):
         x = x.reshape(B, -1, C)
         x = self.proj(x)
         x = self.proj_drop(x)
-
-        if type_ == "temporal":
-            torch.save(x, f"temporal_.{index}.pth")
-        else:
-            torch.save(x, f"spatial_.{index}.pth")
         return x
 
 
