@@ -367,9 +367,13 @@ class STDiT3(PreTrainedModel):
         _, _, Tx, Hx, Wx = x.size()
         T, H, W = self.get_dynamic_size(x)
 
-        S = torch.tensor(H * W)
-        base_size = torch.round(S**0.5)
-        resolution_sq = (height[0] * width[0]) ** 0.5
+        # TODO: Fix this for tensorrt
+        S = H * W
+        base_size = round(S**0.5)
+        resolution_sq = (height[0].item() * width[0].item()) ** 0.5
+        # S = torch.tensor(H * W)
+        # base_size = torch.round(S**0.5)
+        # resolution_sq = (height[0] * width[0]) ** 0.5
         scale = resolution_sq / self.input_sq_size
         pos_emb = self.pos_embed(x, H, W, scale=scale, base_size=base_size)
 
