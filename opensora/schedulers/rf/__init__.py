@@ -7,7 +7,7 @@ from tqdm import tqdm
 
 from opensora.registry import SCHEDULERS
 from opensora.schedulers.rf.rectified_flow import RFlowScheduler, timestep_transform
-from opensora.utils.kv_correct import prepare_kv_correct
+from opensora.utils.mha_kv import prepare_mha_kv
 from opensora.utils.misc import create_logger
 from opensora.utils.profile import get_profiling_status
 from opensora.utils.xformers import block_diagonal_mask
@@ -51,7 +51,7 @@ class RFLOW:
             y_lens: Usually [300, 300].
         """
         # Original
-        # return self.model.encode_text(y, mask)
+        return self.model.encode_text(y, mask)
 
         # Alternative: not depends on model
         y = self.text_encoder.y_embedder(y, training)  # (2, 1, 300, 1152)
@@ -81,17 +81,19 @@ class RFLOW:
         """Pre-compute the bias for cross attention module."""
         T, H, W = self.get_dynamic_size(input)
         B = len(y_lens)
+        max_len = mask.shape[1]
 
         # Prepare block diagonal mask
         config_size = T * H * W  # 2160
-        num_tokens = mask.sum(dim=1).tolist()[0]  # 21
         # return block_diagonal_mask([config_size] * B, y_lens, dtype, device)
 
         # shape: (2 * config_size, 2 * num_tokens)
+        num_tokens = mask.sum(dim=1).tolist()[0]  # 21
         attn_bias = block_diagonal_mask([config_size] * B, [num_tokens] * B, dtype, device)
 
         # pad attn_bias with -inf to shape of (2 * config_size, sum(y_lens))
-        padded_len = int(sum(y_lens) - B * num_tokens)
+        # padded_len = int(sum(y_lens) - B * num_tokens)
+        padded_len = int(B * max_len - B * num_tokens)
         attn_bias = F.pad(attn_bias, (0, padded_len), mode="constant", value=-float("inf"))
 
         return attn_bias
@@ -114,6 +116,7 @@ class RFLOW:
         self.model = model
         self.text_encoder = text_encoder
         hidden_size = 1152
+        num_heads = 16
 
         # if no specific guidance scale is provided, use the default scale when initializing the scheduler
         if guidance_scale is None:
@@ -132,9 +135,15 @@ class RFLOW:
         model_args["y"], y_lens = self.encode_text(hidden_size=1152, **model_args)
         # Prepare cross-attn bias
         model_args["attn_bias"] = self.prepare_crossattn_bias(z, model_args["mask"], y_lens, dtype, device)
-        # Prepare kv-correctness
-        prepare_kv_correct(
-            model_args["mask"], dtype=dtype, device=device, hidden_size=hidden_size, ckpt_dir="save/weights"
+        # Prepare mha-kv
+        prepare_mha_kv(
+            model_args["y"],
+            model_args["mask"],
+            hidden_size=hidden_size,
+            num_heads=num_heads,
+            dtype=dtype,
+            device=device,
+            ckpt_dir="save/weights",
         )
 
         if additional_args is not None:

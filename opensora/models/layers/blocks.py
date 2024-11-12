@@ -24,7 +24,7 @@ from timm.models.vision_transformer import Mlp
 
 from opensora.acceleration.communications import all_to_all, split_forward_gather_backward
 from opensora.acceleration.parallel_states import get_sequence_parallel_group
-from opensora.utils.kv_correct import get_kv_correct
+from opensora.utils.mha_kv import get_mha_kv
 from opensora.utils.xformers import block_diagonal_mask, is_xformers_enabled, memory_efficient_attention
 
 # Import xformers optional
@@ -476,17 +476,17 @@ class MultiHeadCrossAttention(nn.Module):
         self.proj_drop = nn.Dropout(proj_drop)
 
     def forward(self, x, cond, attn_bias=None):
+        # torch.save(self.kv_linear.state_dict(), "save/weights/kv_linear.{}.pth".format(self.name))
+
         # query/value: img tokens; key: condition; mask: if padding tokens
         B, N, C = x.shape
         q = self.q_linear(x).view(1, -1, self.num_heads, self.head_dim)
-        kv = self.kv_linear(cond)
+        # kv = self.kv_linear(cond).view(1, -1, 2, self.num_heads, self.head_dim)
+        # k, v = kv.unbind(2)
 
-        # Correct the bias error
+        # get pre-compute kv
         type_, index = self.name.split(".")
-        index = int(index)
-        kv += get_kv_correct(index, temporal=type_ == "temporal")  # Subtract bias from padding
-        kv = kv.view(1, -1, 2, self.num_heads, self.head_dim)
-        k, v = kv.unbind(2)
+        k, v = get_mha_kv(int(index), temporal=type_ == "temporal")
 
         # Calculate cross attn
         x = memory_efficient_attention(q, k, v, p=self.attn_drop.p, attn_bias=attn_bias)
