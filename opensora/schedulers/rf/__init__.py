@@ -165,6 +165,8 @@ class RFLOW:
 
         latencies["backbone"] = 0
         for i, t in progress_wrap(enumerate(timesteps)):
+            logger.info("Processing step {}...".format(i + 1))
+
             # mask for adding noise
             if mask is not None:
                 mask_t = mask * self.num_timesteps
