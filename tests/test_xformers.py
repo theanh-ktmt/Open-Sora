@@ -5,7 +5,7 @@ import torch
 import torch.nn.functional
 import xformers.ops as xops
 
-from opensora.utils.xformers import block_diagonal_mask, memory_efficient_attention
+from opensora.utils.custom.xformers import block_diagonal_mask, memory_efficient_attention
 
 
 # Helper functions

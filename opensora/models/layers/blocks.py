@@ -24,8 +24,8 @@ from timm.models.vision_transformer import Mlp
 
 from opensora.acceleration.communications import all_to_all, split_forward_gather_backward
 from opensora.acceleration.parallel_states import get_sequence_parallel_group
-from opensora.utils.mha_kv import get_mha_kv
-from opensora.utils.xformers import block_diagonal_mask, is_xformers_enabled, memory_efficient_attention
+from opensora.utils.custom.mha import get_mha_bias, get_mha_kv
+from opensora.utils.custom.xformers import block_diagonal_mask, is_xformers_enabled, memory_efficient_attention
 
 # Import xformers optional
 enable_xformers = is_xformers_enabled()
@@ -475,18 +475,23 @@ class MultiHeadCrossAttention(nn.Module):
         self.proj = nn.Linear(d_model, d_model)
         self.proj_drop = nn.Dropout(proj_drop)
 
-    def forward(self, x, cond, attn_bias=None):
+    def forward(self, x):
         # torch.save(self.kv_linear.state_dict(), "save/weights/kv_linear.{}.pth".format(self.name))
 
         # query/value: img tokens; key: condition; mask: if padding tokens
         B, N, C = x.shape
         q = self.q_linear(x).view(1, -1, self.num_heads, self.head_dim)
+
+        # original code
         # kv = self.kv_linear(cond).view(1, -1, 2, self.num_heads, self.head_dim)
         # k, v = kv.unbind(2)
 
-        # get pre-compute kv
+        # TensorRT: pre-compute kv
         type_, index = self.name.split(".")
         k, v = get_mha_kv(int(index), temporal=type_ == "temporal")
+
+        # TensorRT: pre-compute bias
+        attn_bias = get_mha_bias()
 
         # Calculate cross attn
         x = memory_efficient_attention(q, k, v, p=self.attn_drop.p, attn_bias=attn_bias)

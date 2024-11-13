@@ -96,9 +96,7 @@ class STDiT3Block(nn.Module):
     def forward(
         self,
         x,
-        y,
         t,
-        attn_bias=None,  # cross attn bias
         x_mask=None,  # temporal mask
         t0=None,  # t with timestamp=0
         T=None,  # number of frames
@@ -140,7 +138,7 @@ class STDiT3Block(nn.Module):
         x = x + self.drop_path(x_m_s)
 
         # cross attention
-        x = x + self.cross_attn(x, y, attn_bias)
+        x = x + self.cross_attn(x)
 
         # modulate (MLP)
         x_m = t2i_modulate(self.norm2(x), shift_mlp, scale_mlp)
@@ -360,20 +358,24 @@ class STDiT3(PreTrainedModel):
             y = y.squeeze(1).view(1, -1, self.hidden_size)
         return y, y_lens
 
-    def forward(self, x, timestep, y, x_mask=None, attn_bias=None, fps=None, height=None, width=None, **kwargs):
-        B = x.size(0)
-
+    def forward(self, x, timestep, fps=None, height=None, width=None, **kwargs):
         # === get pos embed ===
-        _, _, Tx, Hx, Wx = x.size()
+        B, _, Tx, Hx, Wx = x.size()
         T, H, W = self.get_dynamic_size(x)
 
-        # TODO: Fix this for tensorrt
-        S = H * W
-        base_size = round(S**0.5)
+        # TensorRT: Ignore image embedding by using default x_mask
+        x_mask = torch.ones(B, T).to(x.device, torch.bool)
+
+        # original code
+        # S = H * W
+        # base_size = round(S**0.5)
+        # resolution_sq = (height[0].item() * width[0].item()) ** 0.5
+
+        # TensorRT: use torch func
+        S = torch.tensor(H * W)
+        base_size = torch.round(S**0.5).item()
         resolution_sq = (height[0].item() * width[0].item()) ** 0.5
-        # S = torch.tensor(H * W)
-        # base_size = torch.round(S**0.5)
-        # resolution_sq = (height[0] * width[0]) ** 0.5
+
         scale = resolution_sq / self.input_sq_size
         pos_emb = self.pos_embed(x, H, W, scale=scale, base_size=base_size)
 
@@ -407,8 +409,8 @@ class STDiT3(PreTrainedModel):
         # === blocks ===
         i = 0
         for spatial_block, temporal_block in zip(self.spatial_blocks, self.temporal_blocks):
-            x = auto_grad_checkpoint(spatial_block, x, y, t_mlp, attn_bias, x_mask, t0_mlp, T, S)
-            x = auto_grad_checkpoint(temporal_block, x, y, t_mlp, attn_bias, x_mask, t0_mlp, T, S)
+            x = auto_grad_checkpoint(spatial_block, x, t_mlp, x_mask, t0_mlp, T, S)
+            x = auto_grad_checkpoint(temporal_block, x, t_mlp, x_mask, t0_mlp, T, S)
             i += 1
 
         if self.enable_sequence_parallelism:

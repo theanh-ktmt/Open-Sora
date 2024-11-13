@@ -1,16 +1,13 @@
 import time
 
 import torch
-import torch.nn.functional as F
 from torch.profiler import ProfilerActivity, profile, record_function
 from tqdm import tqdm
 
 from opensora.registry import SCHEDULERS
 from opensora.schedulers.rf.rectified_flow import RFlowScheduler, timestep_transform
-from opensora.utils.mha_kv import prepare_mha_kv
+from opensora.utils.custom.mha import prepare_mha_bias, prepare_mha_kv
 from opensora.utils.misc import create_logger
-from opensora.utils.profile import get_profiling_status
-from opensora.utils.xformers import block_diagonal_mask
 
 logger = create_logger()
 
@@ -64,40 +61,6 @@ class RFLOW:
         y = y.squeeze(1).view(1, -1, hidden_size)  # (1, 600, 1152)
         return y, y_lens
 
-    def get_dynamic_size(self, x, patch_size=(1, 2, 2)):
-        _, _, T, H, W = x.size()
-        if T % patch_size[0] != 0:
-            T += patch_size[0] - T % patch_size[0]
-        if H % patch_size[1] != 0:
-            H += patch_size[1] - H % patch_size[1]
-        if W % patch_size[2] != 0:
-            W += patch_size[2] - W % patch_size[2]
-        T = T // patch_size[0]
-        H = H // patch_size[1]
-        W = W // patch_size[2]
-        return (T, H, W)
-
-    def prepare_crossattn_bias(self, input, mask, y_lens, dtype, device):
-        """Pre-compute the bias for cross attention module."""
-        T, H, W = self.get_dynamic_size(input)
-        B = len(y_lens)
-        max_len = mask.shape[1]
-
-        # Prepare block diagonal mask
-        config_size = T * H * W  # 2160
-        # return block_diagonal_mask([config_size] * B, y_lens, dtype, device)
-
-        # shape: (2 * config_size, 2 * num_tokens)
-        num_tokens = mask.sum(dim=1).tolist()[0]  # 21
-        attn_bias = block_diagonal_mask([config_size] * B, [num_tokens] * B, dtype, device)
-
-        # pad attn_bias with -inf to shape of (2 * config_size, sum(y_lens))
-        # padded_len = int(sum(y_lens) - B * num_tokens)
-        padded_len = int(B * max_len - B * num_tokens)
-        attn_bias = F.pad(attn_bias, (0, padded_len), mode="constant", value=-float("inf"))
-
-        return attn_bias
-
     def sample(
         self,
         model,
@@ -131,10 +94,11 @@ class RFLOW:
         y_null = text_encoder.null(n)
         model_args["y"] = torch.cat([model_args["y"], y_null], 0).to(dtype)
 
+        # TensorRT: Pre-compute text embedding information
         # Pre-compute y, y_lens
         model_args["y"], y_lens = self.encode_text(hidden_size=1152, **model_args)
         # Prepare cross-attn bias
-        model_args["attn_bias"] = self.prepare_crossattn_bias(z, model_args["mask"], y_lens, dtype, device)
+        prepare_mha_bias(z, model_args["mask"], y_lens, dtype, device)
         # Prepare mha-kv
         prepare_mha_kv(
             model_args["y"],
@@ -185,7 +149,6 @@ class RFLOW:
             t = torch.cat([t, t], 0).to(dtype)
 
             start = time.time()
-
             pred = model(z_in, t, **model_args).chunk(2, dim=1)[0]
             latencies["backbone"] += time.time() - start
 
