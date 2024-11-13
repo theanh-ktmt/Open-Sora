@@ -30,6 +30,7 @@ from opensora.models.layers.blocks import (
 )
 from opensora.registry import MODELS
 from opensora.utils.ckpt_utils import load_checkpoint
+from opensora.utils.custom.pos_emb import get_pos_emb
 from opensora.utils.misc import create_logger
 
 logger = create_logger()
@@ -358,26 +359,17 @@ class STDiT3(PreTrainedModel):
             y = y.squeeze(1).view(1, -1, self.hidden_size)
         return y, y_lens
 
-    def forward(self, x, timestep, fps=None, height=None, width=None, **kwargs):
+    def forward(self, x, timestep, fps=None, **kwargs):
         # === get pos embed ===
         B, _, Tx, Hx, Wx = x.size()
         T, H, W = self.get_dynamic_size(x)
+        S = H * W
 
         # TensorRT: Ignore image embedding by using default x_mask
         x_mask = torch.ones(B, T).to(x.device, torch.bool)
 
-        # original code
-        # S = H * W
-        # base_size = round(S**0.5)
-        # resolution_sq = (height[0].item() * width[0].item()) ** 0.5
-
-        # TensorRT: use torch func
-        S = torch.tensor(H * W)
-        base_size = torch.round(S**0.5).item()
-        resolution_sq = (height[0].item() * width[0].item()) ** 0.5
-
-        scale = resolution_sq / self.input_sq_size
-        pos_emb = self.pos_embed(x, H, W, scale=scale, base_size=base_size)
+        # TensorRT: Pre-compute position embedding
+        pos_emb = get_pos_emb()
 
         # === get timestep embed ===
         t = self.t_embedder(timestep, dtype=x.dtype)  # [B, C]

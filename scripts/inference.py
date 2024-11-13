@@ -109,6 +109,7 @@ def main():
         .eval()
     )
     text_encoder.y_embedder = model.y_embedder  # HACK: for classifier-free guidance
+    # torch.save(text_encoder.y_embedder, "y_embedder.pth")
 
     if is_torch_compile_enabled():
         logger.info("torch.compile is enabled. Run compilling...")

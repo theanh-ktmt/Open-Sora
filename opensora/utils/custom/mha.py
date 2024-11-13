@@ -1,42 +1,16 @@
 import os
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from loguru import logger
 
+from opensora.utils.custom.common import add_padding, get_dynamic_size
 from opensora.utils.custom.xformers import block_diagonal_mask
 
 MHA_KVS: Optional[Dict[str, Any]] = None
 MHA_BIAS: Optional[torch.tensor] = None
-
-
-# Helper functions
-def add_padding(tensor, dim, len=600):
-    """Add padding to a tensor in a specific dimension."""
-    if tensor.shape[dim] >= len:
-        return tensor
-
-    padded_shape = list(tensor.shape)
-    padded_shape[dim] = len - tensor.shape[dim]
-    padding = torch.zeros(padded_shape, dtype=tensor.dtype, device=tensor.device)
-    padded_tensor = torch.cat((tensor, padding), dim=dim)
-    return padded_tensor
-
-
-def get_dynamic_size(x, patch_size=(1, 2, 2)) -> Tuple[int, int, int]:
-    _, _, T, H, W = x.size()
-    if T % patch_size[0] != 0:
-        T += patch_size[0] - T % patch_size[0]
-    if H % patch_size[1] != 0:
-        H += patch_size[1] - H % patch_size[1]
-    if W % patch_size[2] != 0:
-        W += patch_size[2] - W % patch_size[2]
-    T = T // patch_size[0]
-    H = H // patch_size[1]
-    W = W // patch_size[2]
-    return (T, H, W)
 
 
 # For KV
@@ -50,6 +24,7 @@ def prepare_mha_kv(
     _, max_len = mask.shape
     y = y.detach().to(device)
 
+    logger.info("Loading kv_linear weights from {}...".format(ckpt_dir))
     for ckpt in os.listdir(ckpt_dir):
         ckpt_path = os.path.join(ckpt_dir, ckpt)
         state_dict = torch.load(ckpt_path)

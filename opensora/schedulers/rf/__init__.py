@@ -7,6 +7,7 @@ from tqdm import tqdm
 from opensora.registry import SCHEDULERS
 from opensora.schedulers.rf.rectified_flow import RFlowScheduler, timestep_transform
 from opensora.utils.custom.mha import prepare_mha_bias, prepare_mha_kv
+from opensora.utils.custom.pos_emb import prepare_pos_emb
 from opensora.utils.misc import create_logger
 
 logger = create_logger()
@@ -37,28 +38,22 @@ class RFLOW:
             **kwargs,
         )
 
-        self.model = None
-        self.text_encoder = None
+    def load_y_embedder(self, path, device, dtype):
+        """Load y_embedder, a module of STDiT3."""
+        self.y_embedder = torch.load(path, map_location=device).to(dtype)
+        logger.info("Loaded y_embedder from {}!".format(path))
 
     def encode_text(self, y, mask=None, training=False, hidden_size=1152):
-        """Simple text encoding to bypass OpenSora text encoder.
+        """Simple text encoding to bypass OpenSora text encoder."""
+        # HACK: Back to original model encoder
+        # return self.model.encode_text(y, mask)
 
-        Returns:
-            y (torch.tensor): Text embedding, padded with 0 to len 300.
-            y_lens: Usually [300, 300].
-        """
-        # Original
-        return self.model.encode_text(y, mask)
-
-        # Alternative: not depends on model
-        y = self.text_encoder.y_embedder(y, training)  # (2, 1, 300, 1152)
-
-        # Set all pad value to 0
-        num_tokens = mask.sum(dim=1).tolist()[0]  # [21]
-        y[:, :, num_tokens:, :] = 0
-
-        y_lens = [y.shape[2]] * y.shape[0]  # [300, 300]
-        y = y.squeeze(1).view(1, -1, hidden_size)  # (1, 600, 1152)
+        # TensorRT: not depends on model
+        y = self.y_embedder(y, training)  # (2, 1, 300, 1152)
+        mask = mask.repeat(y.shape[0] // mask.shape[0], 1)
+        mask = mask.squeeze(1).squeeze(1)
+        y = y.squeeze(1).masked_select(mask.unsqueeze(-1) != 0).view(1, -1, hidden_size)
+        y_lens = mask.sum(dim=1).tolist()
         return y, y_lens
 
     def sample(
@@ -76,10 +71,12 @@ class RFLOW:
     ):
         latencies = {}
         dtype = model.x_embedder.proj.weight.dtype
-        self.model = model
-        self.text_encoder = text_encoder
+        z = z.to(dtype)
+
+        # TensorRT: Hard-coded config
         hidden_size = 1152
         num_heads = 16
+        input_sq_size = 512
 
         # if no specific guidance scale is provided, use the default scale when initializing the scheduler
         if guidance_scale is None:
@@ -96,6 +93,7 @@ class RFLOW:
 
         # TensorRT: Pre-compute text embedding information
         # Pre-compute y, y_lens
+        self.load_y_embedder("save/weights/y_embedder.pth", device, dtype)
         model_args["y"], y_lens = self.encode_text(hidden_size=1152, **model_args)
         # Prepare cross-attn bias
         prepare_mha_bias(z, model_args["mask"], y_lens, dtype, device)
@@ -107,7 +105,15 @@ class RFLOW:
             num_heads=num_heads,
             dtype=dtype,
             device=device,
-            ckpt_dir="save/weights",
+            ckpt_dir="save/weights/kv_linear",
+        )
+        # Prepare position embedding
+        prepare_pos_emb(
+            z,
+            additional_args["height"],
+            additional_args["width"],
+            hidden_size=hidden_size,
+            input_sq_size=input_sq_size,
         )
 
         if additional_args is not None:
