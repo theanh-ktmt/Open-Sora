@@ -8,6 +8,7 @@ from opensora.registry import SCHEDULERS
 from opensora.schedulers.rf.rectified_flow import RFlowScheduler, timestep_transform
 from opensora.utils.custom.mha import prepare_mha_bias, prepare_mha_kv
 from opensora.utils.custom.pos_emb import prepare_pos_emb
+from opensora.utils.custom.y_embedder import get_y_embedder
 from opensora.utils.misc import create_logger
 
 logger = create_logger()
@@ -37,11 +38,6 @@ class RFLOW:
             use_timestep_transform=use_timestep_transform,
             **kwargs,
         )
-
-    def load_y_embedder(self, path, device, dtype):
-        """Load y_embedder, a module of STDiT3."""
-        self.y_embedder = torch.load(path, map_location=device).to(dtype)
-        logger.info("Loaded y_embedder from {}!".format(path))
 
     def encode_text(self, y, mask=None, training=False, hidden_size=1152):
         """Simple text encoding to bypass OpenSora text encoder."""
@@ -93,7 +89,7 @@ class RFLOW:
 
         # TensorRT: Pre-compute text embedding information
         # Pre-compute y, y_lens
-        self.load_y_embedder("save/weights/y_embedder.pth", device, dtype)
+        self.y_embedder = get_y_embedder()
         model_args["y"], y_lens = self.encode_text(hidden_size=1152, **model_args)
         # Prepare cross-attn bias
         prepare_mha_bias(z, model_args["mask"], y_lens, dtype, device)

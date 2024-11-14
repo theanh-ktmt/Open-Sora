@@ -15,7 +15,6 @@ from opensora.acceleration.communications import gather_forward_split_backward, 
 from opensora.acceleration.parallel_states import get_sequence_parallel_group
 from opensora.models.layers.blocks import (
     Attention,
-    CaptionEmbedder,
     MultiHeadCrossAttention,
     PatchEmbed3D,
     PositionEmbedding2D,
@@ -247,13 +246,13 @@ class STDiT3(PreTrainedModel):
             nn.SiLU(),
             nn.Linear(config.hidden_size, 6 * config.hidden_size, bias=True),
         )
-        self.y_embedder = CaptionEmbedder(
-            in_channels=config.caption_channels,
-            hidden_size=config.hidden_size,
-            uncond_prob=config.class_dropout_prob,
-            act_layer=approx_gelu,
-            token_num=config.model_max_length,
-        )
+        # self.y_embedder = CaptionEmbedder(
+        #     in_channels=config.caption_channels,
+        #     hidden_size=config.hidden_size,
+        #     uncond_prob=config.class_dropout_prob,
+        #     act_layer=approx_gelu,
+        #     token_num=config.model_max_length,
+        # )
 
         # spatial blocks
         drop_path = [x.item() for x in torch.linspace(0, self.drop_path, config.depth)]
@@ -307,9 +306,9 @@ class STDiT3(PreTrainedModel):
                 for param in block.parameters():
                     param.requires_grad = True
 
-        if config.freeze_y_embedder:
-            for param in self.y_embedder.parameters():
-                param.requires_grad = False
+        # if config.freeze_y_embedder:
+        #     for param in self.y_embedder.parameters():
+        #         param.requires_grad = False
 
     def initialize_weights(self):
         # Initialize transformer layers:
@@ -346,18 +345,18 @@ class STDiT3(PreTrainedModel):
         W = W // self.patch_size[2]
         return (T, H, W)
 
-    def encode_text(self, y, mask=None):
-        y = self.y_embedder(y, self.training)  # [B, 1, N_token, C]
-        if mask is not None:
-            if mask.shape[0] != y.shape[0]:
-                mask = mask.repeat(y.shape[0] // mask.shape[0], 1)
-            mask = mask.squeeze(1).squeeze(1)
-            y = y.squeeze(1).masked_select(mask.unsqueeze(-1) != 0).view(1, -1, self.hidden_size)
-            y_lens = mask.sum(dim=1).tolist()
-        else:
-            y_lens = [y.shape[2]] * y.shape[0]
-            y = y.squeeze(1).view(1, -1, self.hidden_size)
-        return y, y_lens
+    # def encode_text(self, y, mask=None):
+    #     y = self.y_embedder(y, self.training)  # [B, 1, N_token, C]
+    #     if mask is not None:
+    #         if mask.shape[0] != y.shape[0]:
+    #             mask = mask.repeat(y.shape[0] // mask.shape[0], 1)
+    #         mask = mask.squeeze(1).squeeze(1)
+    #         y = y.squeeze(1).masked_select(mask.unsqueeze(-1) != 0).view(1, -1, self.hidden_size)
+    #         y_lens = mask.sum(dim=1).tolist()
+    #     else:
+    #         y_lens = [y.shape[2]] * y.shape[0]
+    #         y = y.squeeze(1).view(1, -1, self.hidden_size)
+    #     return y, y_lens
 
     def forward(self, x, timestep, fps=None, **kwargs):
         # === get pos embed ===

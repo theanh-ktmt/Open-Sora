@@ -20,6 +20,7 @@ from opensora.registry import MODELS, SCHEDULERS, build_module
 from opensora.utils.config_utils import parse_configs
 from opensora.utils.custom.tensorrt import is_tensorrt_enabled
 from opensora.utils.custom.torchcompile import compile_module, is_torch_compile_enabled
+from opensora.utils.custom.y_embedder import get_y_embedder, load_y_embedder
 from opensora.utils.inference_utils import (
     add_watermark,
     append_generated,
@@ -108,7 +109,9 @@ def main():
         .to(device, dtype)
         .eval()
     )
-    text_encoder.y_embedder = model.y_embedder  # HACK: for classifier-free guidance
+    # text_encoder.y_embedder = model.y_embedder  # HACK: for classifier-free guidance
+    load_y_embedder("save/weights/y_embedder.pth", device, dtype)
+    text_encoder.y_embedder = get_y_embedder()
     # torch.save(text_encoder.y_embedder, "y_embedder.pth")
 
     if is_torch_compile_enabled():
