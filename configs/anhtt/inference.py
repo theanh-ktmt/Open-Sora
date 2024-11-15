@@ -17,7 +17,7 @@ model = dict(
     type="STDiT3-XL/2",
     from_pretrained="hpcai-tech/OpenSora-STDiT-v3",
     qk_norm=True,
-    enable_flash_attn=True,
+    enable_flash_attn=False,
     enable_layernorm_kernel=False,
 )
 vae = dict(

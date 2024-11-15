@@ -6,6 +6,7 @@ from pathlib import Path
 
 import torch
 import torch.nn as nn
+from torch.profiler import ProfilerActivity, profile, record_function
 
 from opensora.datasets import IMG_FPS
 from opensora.datasets.utils import read_from_path
@@ -113,7 +114,26 @@ def collect_references_batch(
             r = read_from_path(r_path, image_size, transform_name="resize_crop")
 
             start = time.time()
-            r_x = vae.encode(r.unsqueeze(0).to(vae.device, vae.dtype))
+            if is_profiling:
+                # Wrap the image encoder with profiler
+                with profile(
+                    activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA],
+                    # profile_memory=True,
+                    record_shapes=True,
+                    with_stack=True,
+                ) as prof:
+                    with record_function("image_embedding"):
+                        r_x = vae.encode(r.unsqueeze(0).to(vae.device, vae.dtype))
+
+                # Save profiling data
+                with open(profile_dir / "image_embedding.profile", "w") as f:
+                    table = prof.key_averages(group_by_input_shape=True).table(
+                        sort_by="cuda_time_total", row_limit=10000
+                    )
+                    f.write(str(table))
+                prof.export_chrome_trace(str(profile_dir / "image_embedding.json"))
+            else:
+                r_x = vae.encode(r.unsqueeze(0).to(vae.device, vae.dtype))
             latency += time.time() - start
 
             r_x = r_x.squeeze(0)

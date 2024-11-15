@@ -8,6 +8,7 @@ from opensora.registry import SCHEDULERS
 from opensora.schedulers.rf.rectified_flow import RFlowScheduler, timestep_transform
 from opensora.utils.custom.mha import prepare_mha_bias, prepare_mha_kv
 from opensora.utils.custom.pos_emb import prepare_pos_emb
+from opensora.utils.custom.profile import get_profiling_status
 from opensora.utils.custom.y_embedder import get_y_embedder
 from opensora.utils.misc import create_logger
 
@@ -66,6 +67,8 @@ class RFLOW:
         return_latencies=False,
     ):
         latencies = {}
+        is_profiling, ignore_steps, profile_dir = get_profiling_status()
+
         dtype = model.x_embedder.proj.weight.dtype
         z = z.to(dtype)
 
@@ -80,10 +83,29 @@ class RFLOW:
 
         n = len(prompts)
 
+        # embed prompts
         start = time.time()
-        model_args = text_encoder.encode(prompts)
+        if is_profiling:
+            # Wrap the text encoder with profiler
+            with profile(
+                activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA],
+                # profile_memory=True,
+                record_shapes=True,
+                with_stack=True,
+            ) as prof:
+                with record_function("text_embedding"):
+                    model_args = text_encoder.encode(prompts)
+
+            # Save profiling data
+            with open(profile_dir / "text_embedding.profile", "w") as f:
+                table = prof.key_averages(group_by_input_shape=True).table(sort_by="cuda_time_total", row_limit=10000)
+                f.write(str(table))
+            prof.export_chrome_trace(str(profile_dir / "text_embedding.json"))
+        else:
+            model_args = text_encoder.encode(prompts)
         latencies["text_encoder"] = time.time() - start
 
+        # classifier-free guidance
         y_null = text_encoder.null(n)
         model_args["y"] = torch.cat([model_args["y"], y_null], 0).to(dtype)
 
@@ -123,13 +145,70 @@ class RFLOW:
         if self.use_timestep_transform:
             timesteps = [timestep_transform(t, additional_args, num_timesteps=self.num_timesteps) for t in timesteps]
 
+        # diffusion process
+        if is_profiling:
+            # wrap diffusion path with profiler
+            with profile(
+                activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA],
+                # profile_memory=True,
+                record_shapes=True,
+                with_stack=True,
+            ) as prof:
+                z, latencies["backbone"] = self.diffuse(
+                    model,
+                    z,
+                    timesteps,
+                    mask,
+                    model_args,
+                    dtype,
+                    guidance_scale,
+                    progress=progress,
+                    is_profiling=True,
+                    ignore_steps=ignore_steps,
+                )
+
+            # save profiling data
+            with open(profile_dir / "backbone.profile", "w") as f:
+                table = prof.key_averages(group_by_input_shape=True).table(sort_by="cuda_time_total", row_limit=10000)
+                f.write(str(table))
+            prof.export_chrome_trace(str(profile_dir / "backbone.json"))
+        else:
+            z, latencies["backbone"] = self.diffuse(
+                model,
+                z,
+                timesteps,
+                mask,
+                model_args,
+                dtype,
+                guidance_scale,
+                progress=progress,
+                is_profiling=False,
+            )
+
+        if return_latencies:
+            return z, latencies
+        return z
+
+    def diffuse(
+        self,
+        model,
+        z,
+        timesteps,
+        mask,
+        model_args,
+        dtype,
+        guidance_scale,
+        progress=True,
+        is_profiling=False,
+        ignore_steps=1,
+    ):
         if mask is not None:
             noise_added = torch.zeros_like(mask, dtype=torch.bool)
             noise_added = noise_added | (mask == 1)
 
         progress_wrap = tqdm if progress else (lambda x: x)
 
-        latencies["backbone"] = 0
+        latency = 0
         for i, t in progress_wrap(enumerate(timesteps)):
             logger.info("Processing step {}...".format(i + 1))
 
@@ -151,8 +230,12 @@ class RFLOW:
             t = torch.cat([t, t], 0).to(dtype)
 
             start = time.time()
-            pred = model(z_in, t, **model_args).chunk(2, dim=1)[0]
-            latencies["backbone"] += time.time() - start
+            if is_profiling and i >= ignore_steps:
+                with record_function("video_generation"):
+                    pred = model(z_in, t, **model_args).chunk(2, dim=1)[0]
+            else:
+                pred = model(z_in, t, **model_args).chunk(2, dim=1)[0]
+            latency += time.time() - start
 
             pred_cond, pred_uncond = pred.chunk(2, dim=0)
             v_pred = pred_uncond + guidance_scale * (pred_cond - pred_uncond)
@@ -165,9 +248,7 @@ class RFLOW:
             if mask is not None:
                 z = torch.where(mask_t_upper[:, None, :, None, None], z, x0)
 
-        if return_latencies:
-            return z, latencies
-        return z
+        return z, latency
 
     def training_losses(self, model, x_start, model_kwargs=None, noise=None, mask=None, weights=None, t=None):
         return self.scheduler.training_losses(model, x_start, model_kwargs, noise, mask, weights, t)

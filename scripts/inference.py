@@ -115,11 +115,7 @@ def main():
     # torch.save(text_encoder.y_embedder, "y_embedder.pth")
 
     if is_torch_compile_enabled():
-        logger.info("torch.compile is enabled. Run compilling...")
-        text_encoder.t5.model = compile_module(text_encoder.t5.model)
-        vae = compile_module(vae)
         model = compile_module(model)
-        logger.info("Compiling done!")
 
     if is_tensorrt_enabled():
         del model  # Remove old model
