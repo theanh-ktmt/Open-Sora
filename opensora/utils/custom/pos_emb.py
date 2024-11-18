@@ -3,7 +3,6 @@ from typing import Optional
 import torch
 from loguru import logger
 
-from opensora.models.layers.blocks import PositionEmbedding2D
 from opensora.utils.custom.common import get_dynamic_size
 
 POS_EMB: Optional[torch.tensor] = None
@@ -14,6 +13,9 @@ def prepare_pos_emb(
 ) -> None:
     """Prepare position embedding for STDiT3 model."""
     global POS_EMB
+
+    from opensora.models.layers.blocks import PositionEmbedding2D
+
     pos_embed = PositionEmbedding2D(hidden_size).to(x.device, x.dtype)
     _, H, W = get_dynamic_size(x)
 

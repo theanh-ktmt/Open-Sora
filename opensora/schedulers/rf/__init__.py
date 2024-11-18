@@ -1,7 +1,6 @@
 import time
 
 import torch
-from torch.profiler import ProfilerActivity, profile, record_function
 from tqdm import tqdm
 
 from opensora.registry import SCHEDULERS
@@ -90,11 +89,11 @@ class RFLOW:
         # TensorRT: Pre-compute text embedding information
         # Pre-compute y, y_lens
         self.y_embedder = get_y_embedder()
-        model_args["y"], y_lens = self.encode_text(hidden_size=1152, **model_args)
+        model_args["y"], y_lens = self.encode_text(hidden_size=hidden_size, **model_args)
         # Prepare cross-attn bias
-        prepare_mha_bias(z, model_args["mask"], y_lens, dtype, device)
+        mha_bias = prepare_mha_bias(z, model_args["mask"], y_lens, dtype, device)
         # Prepare mha-kv
-        prepare_mha_kv(
+        mha_kvs = prepare_mha_kv(
             model_args["y"],
             model_args["mask"],
             hidden_size=hidden_size,
@@ -151,7 +150,15 @@ class RFLOW:
             t = torch.cat([t, t], 0).to(dtype)
 
             start = time.time()
-            pred = model(z_in, t, **model_args).chunk(2, dim=1)[0]
+            pred = model(
+                z_in,
+                t,
+                mha_bias=mha_bias,
+                **mha_kvs,
+                **model_args,
+            ).chunk(
+                2, dim=1
+            )[0]
             latencies["backbone"] += time.time() - start
 
             pred_cond, pred_uncond = pred.chunk(2, dim=0)

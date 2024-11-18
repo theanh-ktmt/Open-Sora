@@ -6,6 +6,8 @@ import torch
 from loguru import logger
 
 from opensora.registry import MODELS, build_module
+from opensora.utils.custom.mha import prepare_mha_bias, prepare_mha_kv
+from opensora.utils.custom.pos_emb import prepare_pos_emb
 
 # Load argument
 parser = argparse.ArgumentParser()
@@ -20,7 +22,7 @@ os.makedirs(os.path.dirname(args.onnx_path), exist_ok=True)
 
 
 # Settings
-device = torch.device("cuda")
+device = torch.device("cpu")
 dtype = torch.float32
 
 
@@ -54,8 +56,8 @@ inputs = torch.load(input_path, map_location=device)
 z_in = inputs["z_in"]
 t_in = inputs["t_in"]
 y = inputs["y"]
+y_lens = inputs["y_lens"]
 mask = inputs["mask"]
-x_mask = inputs["x_mask"]
 fps = inputs["fps"]
 height = inputs["height"]
 width = inputs["width"]
@@ -65,53 +67,51 @@ z_in: {z_in.shape} {z_in.dtype}
 t_in: {t_in.shape} {t_in.dtype}
 y: {y.shape} {y.dtype}
 mask: {mask.shape} {mask.dtype}
-x_mask: {x_mask.shape} {x_mask.dtype}
 fps: {fps.shape} {fps.dtype}
 height: {height.shape} {height.dtype}
 width: {width.shape} {width.dtype}"""
 )
 
+# Prepare additional informations
+logger.info("Preparing Multi-head Attention bias...")
+prepare_mha_bias(z_in[0].unsqueeze(0), mask, y_lens, dtype, device)
+# Prepare mha-kv
+logger.info("Preparing Multi-head Attention KV...")
+prepare_mha_kv(
+    y,
+    mask,
+    hidden_size=1152,
+    num_heads=16,
+    dtype=dtype,
+    device=device,
+    ckpt_dir="save/weights/kv_linear",
+)
+logger.info("Preparing positional embedding...")
+prepare_pos_emb(
+    z_in[0].unsqueeze(0),
+    height,
+    width,
+    hidden_size=1152,
+    input_sq_size=512,
+)
+
 # Convert to ONNX
 logger.info("Exporting ONNX models...")
-dynamic_axes = {
-    "z_in": {
-        0: "2batchsize",
-        # 2: "frames",
-        # 3: "height",
-        # 4: "width",
-    },
-    "t_in": {
-        0: "2batchsize",
-    },
-    "y": {
-        0: "2batchsize",
-    },
-    # "mask": {
-    #     0: "2batchsize",
-    # },
-    # "x_mask": {
-    #     0: "2batchsize",
-    #     # 1: "frames",
-    # },
-    "output": {
-        0: "2batchsize",
-    },
-}
-
-# ignore mask and x_mask
-mask = None
-x_mask = None
+# dynamic_axes = {
+#     "z_in": {
+#         0: "2batchsize"
+#     },
+#     "t_in": {
+#         0: "2batchsize",
+#     }
+# }
 
 input_names = [
     "z_in",
     "t_in",
-    "y",
-    # "mask", "x_mask",
     "fps",
-    "height",
-    "width",
 ]
-inputs = (z_in, t_in, y, mask, x_mask, fps, height, width)
+inputs = (z_in, t_in, fps)
 output_names = ["output"]
 
 with torch.no_grad():

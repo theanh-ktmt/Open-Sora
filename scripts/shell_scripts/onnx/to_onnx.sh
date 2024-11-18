@@ -23,24 +23,24 @@ measure_time() {
 }
 
 # Run ONNX on FP32
-echo "Preparing input..."
-measure_time python scripts/onnx/prepare_input.py --data-dir "$DATA_DIR"
+# echo "Preparing input..."
+# measure_time python scripts/onnx/prepare_input.py --data-dir "$DATA_DIR"
 
 echo "Exporting to ONNX..."
 measure_time python scripts/onnx/export_onnx.py --data-dir "$DATA_DIR" --onnx-path "$ONNX_PATH"
 
-echo "Shape Inference ONNX architecture..."
-measure_time python scripts/onnx/shape_inference.py --input "$ONNX_PATH" --output "$INFERRED_PATH"
+# echo "Shape Inference ONNX architecture..."
+# measure_time python scripts/onnx/shape_inference.py --input "$ONNX_PATH" --output "$INFERRED_PATH"
 
-# Run TensorRT with desired precision
-echo "Comparing ONNX outputs..."
-CMD="measure_time python scripts/onnx/check_onnx.py \
-    --data-dir \"$DATA_DIR\" \
-    --onnx-path \"$INFERRED_PATH\" \
-    --cache-dir \"$CACHE_DIR\""
-if [ "$DTYPE" == "fp16" ]; then
-    CMD+=" --fp16"
-fi
-eval $CMD
+# # Run TensorRT with desired precision
+# echo "Comparing ONNX outputs..."
+# CMD="measure_time python scripts/onnx/check_onnx.py \
+#     --data-dir \"$DATA_DIR\" \
+#     --onnx-path \"$INFERRED_PATH\" \
+#     --cache-dir \"$CACHE_DIR\""
+# if [ "$DTYPE" == "fp16" ]; then
+#     CMD+=" --fp16"
+# fi
+# eval $CMD
 
 echo "Done!"

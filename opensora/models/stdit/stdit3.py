@@ -97,6 +97,9 @@ class STDiT3Block(nn.Module):
         self,
         x,
         t,
+        mha_key,
+        mha_value,
+        mha_bias,
         x_mask=None,  # temporal mask
         t0=None,  # t with timestamp=0
         T=None,  # number of frames
@@ -138,7 +141,7 @@ class STDiT3Block(nn.Module):
         x = x + self.drop_path(x_m_s)
 
         # cross attention
-        x = x + self.cross_attn(x)
+        x = x + self.cross_attn(x, mha_key, mha_value, mha_bias)
 
         # modulate (MLP)
         x_m = t2i_modulate(self.norm2(x), shift_mlp, scale_mlp)
@@ -398,11 +401,31 @@ class STDiT3(PreTrainedModel):
         x = rearrange(x, "B T S C -> B (T S) C", T=T, S=S)
 
         # === blocks ===
-        i = 0
-        for spatial_block, temporal_block in zip(self.spatial_blocks, self.temporal_blocks):
-            x = auto_grad_checkpoint(spatial_block, x, t_mlp, x_mask, t0_mlp, T, S)
-            x = auto_grad_checkpoint(temporal_block, x, t_mlp, x_mask, t0_mlp, T, S)
-            i += 1
+        for i, (spatial_block, temporal_block) in enumerate(zip(self.spatial_blocks, self.temporal_blocks)):
+            x = auto_grad_checkpoint(
+                spatial_block,
+                x,
+                t_mlp,
+                kwargs[f"mha_s{i}_k"],
+                kwargs[f"mha_s{i}_v"],
+                kwargs["mha_bias"],
+                x_mask,
+                t0_mlp,
+                T,
+                S,
+            )
+            x = auto_grad_checkpoint(
+                temporal_block,
+                x,
+                t_mlp,
+                kwargs[f"mha_t{i}_k"],
+                kwargs[f"mha_t{i}_v"],
+                kwargs["mha_bias"],
+                x_mask,
+                t0_mlp,
+                T,
+                S,
+            )
 
         if self.enable_sequence_parallelism:
             x = rearrange(x, "B (T S) C -> B T S C", T=T, S=S)

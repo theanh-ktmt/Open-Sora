@@ -1,5 +1,5 @@
 import os
-from typing import Any, Dict, List, Optional
+from typing import Dict, List
 
 import torch
 import torch.nn as nn
@@ -9,17 +9,13 @@ from loguru import logger
 from opensora.utils.custom.common import add_padding, get_dynamic_size
 from opensora.utils.custom.xformers import block_diagonal_mask
 
-MHA_KVS: Optional[Dict[str, Any]] = None
-MHA_BIAS: Optional[torch.tensor] = None
-
 
 # For KV
 def prepare_mha_kv(
     y, mask, hidden_size=1152, num_heads=16, dtype=torch.float32, device=torch.device("cpu"), ckpt_dir="save/weights"
-):
+) -> Dict[str, torch.Tensor]:
     """Prepare KV for Multi-head Attention."""
-    global MHA_KVS
-    MHA_KVS = {"spatial": [None] * 28, "temporal": [None] * 28}
+    mha_kvs = {}
 
     _, max_len = mask.shape
     y = y.detach().to(device)
@@ -41,29 +37,23 @@ def prepare_mha_kv(
             k = add_padding(k, dim=1, len=max_len * 2)
             v = add_padding(v, dim=1, len=max_len * 2)
 
-        type_ = "spatial" if "spatial" in ckpt else "temporal"
+        type_ = "s" if "spatial" in ckpt else "t"
         index = int(ckpt.split(".")[-2])
-        MHA_KVS[type_][index] = [k, v]
+        mha_kvs[f"mha_{type_}{index}_k"] = k
+        mha_kvs[f"mha_{type_}{index}_v"] = v
+
         del kv, k, v, kv_linear, state_dict
         torch.cuda.empty_cache()
 
     logger.success("Done preparing KV for Multi-head Attention!")
-
-
-def get_mha_kv(index, temporal=False):
-    if temporal:
-        return MHA_KVS["temporal"][index]
-    else:
-        return MHA_KVS["spatial"][index]
+    return mha_kvs
 
 
 # For bias
 def prepare_mha_bias(
     input: torch.Tensor, mask: torch.Tensor, y_lens: List[int], dtype: torch.dtype, device: torch.device
-) -> None:
+) -> torch.Tensor:
     """Pre-compute the bias for cross attention module."""
-    global MHA_BIAS
-
     T, H, W = get_dynamic_size(input)
     B = len(y_lens)
     max_len = mask.shape[1]
@@ -80,10 +70,7 @@ def prepare_mha_bias(
 
     # Calculate the padded length
     padded_len = B * max_len - B * num_tokens
-    MHA_BIAS = F.pad(attn_bias, (0, padded_len), mode="constant", value=-float("inf"))
+    mha_bias = F.pad(attn_bias, (0, padded_len), mode="constant", value=-float("inf"))
     logger.success("Done preparing bias for Multi-head Attention!")
 
-
-def get_mha_bias() -> Optional[torch.tensor]:
-    """Get bias for Multi-head CrossAttention module."""
-    return MHA_BIAS
+    return mha_bias

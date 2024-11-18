@@ -207,3 +207,4 @@ vbench2_beta_i2v
 save
 tensorrt/resources
 scripts/play
+data-gym-cache/

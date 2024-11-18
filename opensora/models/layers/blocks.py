@@ -24,7 +24,6 @@ from timm.models.vision_transformer import Mlp
 
 from opensora.acceleration.communications import all_to_all, split_forward_gather_backward
 from opensora.acceleration.parallel_states import get_sequence_parallel_group
-from opensora.utils.custom.mha import get_mha_bias, get_mha_kv
 from opensora.utils.custom.xformers import block_diagonal_mask, is_xformers_enabled, memory_efficient_attention
 
 # Import xformers optional
@@ -475,29 +474,23 @@ class MultiHeadCrossAttention(nn.Module):
         self.proj = nn.Linear(d_model, d_model)
         self.proj_drop = nn.Dropout(proj_drop)
 
-    def forward(self, x):
+    def forward(self, x, k, v, attn_bias=None):
         # torch.save(self.kv_linear.state_dict(), "save/weights/kv_linear.{}.pth".format(self.name))
 
         # query/value: img tokens; key: condition; mask: if padding tokens
         B, N, C = x.shape
         q = self.q_linear(x).view(1, -1, self.num_heads, self.head_dim)
-
-        # original code
         # kv = self.kv_linear(cond).view(1, -1, 2, self.num_heads, self.head_dim)
         # k, v = kv.unbind(2)
 
-        # TensorRT: pre-compute kv
-        type_, index = self.name.split(".")
-        k, v = get_mha_kv(int(index), temporal=type_ == "temporal")
-
-        # TensorRT: pre-compute bias
-        attn_bias = get_mha_bias()
-
         # Calculate cross attn
-        x = memory_efficient_attention(q, k, v, p=self.attn_drop.p, attn_bias=attn_bias)
+        if enable_xformers:
+            x = xformers.ops.memory_efficient_attention(q, k, v, p=self.attn_drop.p, attn_bias=attn_bias)
+        else:
+            x = memory_efficient_attention(q, k, v, p=self.attn_drop.p, attn_bias=attn_bias)
 
         # normal tensor is not contiguous for view function
-        x = x.reshape(B, -1, C)
+        x = x.view(B, -1, C) if enable_xformers else x.reshape(B, -1, C)
         x = self.proj(x)
         x = self.proj_drop(x)
         return x

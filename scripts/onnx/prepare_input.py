@@ -6,8 +6,9 @@ from loguru import logger
 from mmengine.runner import set_random_seed
 
 from opensora.datasets.aspect import get_image_size, get_num_frames
-from opensora.registry import MODELS, build_module
-from opensora.schedulers.rf.rectified_flow import RFlowScheduler, timestep_transform
+from opensora.registry import MODELS, SCHEDULERS, build_module
+from opensora.schedulers.rf.rectified_flow import timestep_transform
+from opensora.utils.custom.y_embedder import get_y_embedder, load_y_embedder
 from opensora.utils.inference_utils import (
     apply_mask_strategy,
     collect_references_batch,
@@ -91,21 +92,23 @@ logger.info("Building diffusion model...")
 input_size = (num_frames, *image_size)
 latent_size = vae.get_latent_size(input_size)
 
-model = (
-    build_module(
-        model_cfg,
-        MODELS,
-        input_size=latent_size,
-        in_channels=vae.out_channels,
-        caption_channels=text_encoder.output_dim,
-        model_max_length=text_encoder.model_max_length,
-        enable_sequence_parallelism=False,
-    )
-    .to(device, dtype)
-    .eval()
-)
-text_encoder.y_embedder = model.y_embedder  # HACK: for classifier-free guidance
-logger.info("Model:\n{}".format(model))
+# model = (
+#     build_module(
+#         model_cfg,
+#         MODELS,
+#         input_size=latent_size,
+#         in_channels=vae.out_channels,
+#         caption_channels=text_encoder.output_dim,
+#         model_max_length=text_encoder.model_max_length,
+#         enable_sequence_parallelism=False,
+#     )
+#     .to(device, dtype)
+#     .eval()
+# )
+# text_encoder.y_embedder = model.y_embedder  # HACK: for classifier-free guidance
+# logger.info("Model:\n{}".format(model))
+load_y_embedder("save/weights/y_embedder.pth", device, dtype)
+text_encoder.y_embedder = get_y_embedder()
 
 configs = {
     "model_cfg": model_cfg,
@@ -116,27 +119,21 @@ configs = {
 }
 logger.info("Configurations:\n{}".format(configs))
 
+
+# Build scheduler
+scheduler = build_module(scheduler_cfg, SCHEDULERS)
+
+
 config_path = os.path.join(args.data_dir, "configs.pth")
 torch.save(configs, config_path)
 logger.success("Configs saved at {}!".format(config_path))
 
-# Text conditioning
+
 prompts = ["A bear climbing a tree"]
-logger.info("Prompts: {}".format(prompts))
-logger.info("Embedding texts...")
-model_args = text_encoder.encode(prompts)
-model_args["y"].shape, model_args["mask"].shape
-
-
-# Classifier-free guidance
 n = len(prompts)
-y_null = text_encoder.null(n)
-model_args["y"] = torch.cat([model_args["y"], y_null], 0)
-model_args["mask"] = model_args["mask"].repeat(2, 1)
 
 # Prepare additional arguments
 additional_args = prepare_multi_resolution_info(multi_resolution, n, image_size, num_frames, fps, device, dtype)
-model_args.update(additional_args)
 
 logger.info("Preparing noise and timestep input...")
 # Timesteps
@@ -146,9 +143,25 @@ timesteps = [timestep_transform(t, additional_args, num_timesteps=num_timesteps)
 # Noise input
 z = torch.randn(n, vae.out_channels, *latent_size, device=device, dtype=dtype)
 
+# Text conditioning
+logger.info("Prompts: {}".format(prompts))
+logger.info("Embedding texts...")
+model_args = text_encoder.encode(prompts)
+
+
+# Classifier-free guidance
+n = len(prompts)
+y_null = text_encoder.null(n)
+model_args["y"] = torch.cat([model_args["y"], y_null], 0).to(dtype)
+# model_args["mask"] = model_args["mask"].repeat(2, 1)
+
+scheduler.y_embedder = get_y_embedder()
+model_args["y"], y_lens = scheduler.encode_text(hidden_size=1152, **model_args)
+model_args.update(additional_args)
+
 # Image conditioning
 logger.info("Embedding images...")
-refs = ["/remote/vast0/tran/workspace/Open-Sora/save/references/sample.jpg"]
+refs = ["/home/tran/workspace/Open-Sora/save/references/sample.jpg"]
 mask_strategy = [""]
 
 prompts, refs, ms = extract_json_from_prompts(prompts, refs, mask_strategy)
@@ -165,51 +178,46 @@ t = timesteps[0]
 
 # Prepare mask
 logger.info("Convert image embedding to mask...")
-scheduler = RFlowScheduler(
-    num_timesteps=num_timesteps,
-    num_sampling_steps=num_sampling_steps,
-    use_discrete_timesteps=False,
-    use_timestep_transform=True,
-)
-mask_t = mask * num_timesteps
-x0 = z.clone()
-x_noise = scheduler.add_noise(x0, torch.randn_like(x0), t)
+### NOTE: Skip x_mask
+# mask_t = mask * num_timesteps
+# x0 = z.clone()
+# x_noise = scheduler.scheduler.add_noise(x0, torch.randn_like(x0), t)
 
-mask_t_upper = mask_t >= t.unsqueeze(1)
-model_args["x_mask"] = mask_t_upper.repeat(2, 1)
-mask_add_noise = mask_t_upper & ~noise_added
+# mask_t_upper = mask_t >= t.unsqueeze(1)
+# model_args["x_mask"] = mask_t_upper.repeat(2, 1)
+# mask_add_noise = mask_t_upper & ~noise_added
 
-z = torch.where(mask_add_noise[:, None, :, None, None], x_noise, x0)
-noise_added = mask_t_upper
+# z = torch.where(mask_add_noise[:, None, :, None, None], x_noise, x0)
+# noise_added = mask_t_upper
 
 
 # Prepare input data
-z_in = torch.cat([z, z], 0)
-t_in = torch.cat([t, t], 0)
+z_in = torch.cat([z, z], 0).to(dtype)
+t_in = torch.cat([t, t], 0).to(dtype)
 
 # Unpack model args
 y = model_args["y"]
 mask = model_args["mask"]
-x_mask = model_args["x_mask"]
+# x_mask = model_args["x_mask"]
 fps = model_args["fps"]
 height = model_args["height"]
 width = model_args["width"]
 logger.info(
     f"""Inputs:
-y: {y.shape} {y.dtype}
-mask: {mask.shape} {mask.dtype}
-x_mask: {x_mask.shape} {x_mask.dtype}
-fps: {fps.shape} {fps.dtype}
-height: {height.shape} {height.dtype}
-width: {width.shape} {width.dtype}"""
+    y: {y.shape} {y.dtype}
+    mask: {mask.shape} {mask.dtype}
+    fps: {fps.shape} {fps.dtype}
+    height: {height.shape} {height.dtype}
+    width: {width.shape} {width.dtype}"""
 )
 
 inputs = {
     "z_in": z_in,
     "t_in": t_in,
     "y": y,
+    "y_lens": y_lens,
     "mask": mask,
-    "x_mask": x_mask,
+    # "x_mask": x_mask,
     "fps": fps,
     "height": height,
     "width": width,
