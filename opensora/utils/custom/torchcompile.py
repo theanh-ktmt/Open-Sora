@@ -20,11 +20,18 @@ def is_torch_compile_enabled() -> bool:
     return ENABLE_TORCHCOMPILE
 
 
-def compile_module(module: nn.Module, configs: Optional[Dict[str, Any]] = None):
+def compile_module(
+    module: nn.Module, configs: Optional[Dict[str, Any]] = None, cache_path: str = "save/cache/model.compiled.pth"
+):
     """Implement torch.compile for an nn.Module."""
+    # prepare configs
     DEFAULT_CONFIGS = {
-        # "fullgraph": False,
-        # "mode": "max-autotune",
+        "mode": "default",
+        # "mode": "max-autotune",   # not working
+        # "fullgraph": True,        # not working
     }
     configs = DEFAULT_CONFIGS if configs is None else configs
+
+    # start compile
+    logger.info("Start compiling...")
     return torch.compile(module, **configs)
