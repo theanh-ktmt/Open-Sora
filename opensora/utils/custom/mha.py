@@ -39,8 +39,8 @@ def prepare_mha_kv(
 
         type_ = "s" if "spatial" in ckpt else "t"
         index = int(ckpt.split(".")[-2])
-        mha_kvs[f"mha_{type_}{index}_k"] = k
-        mha_kvs[f"mha_{type_}{index}_v"] = v
+        mha_kvs[f"mha_{type_}{index:02}_k"] = k
+        mha_kvs[f"mha_{type_}{index:02}_v"] = v
 
         del kv, k, v, kv_linear, state_dict
         torch.cuda.empty_cache()

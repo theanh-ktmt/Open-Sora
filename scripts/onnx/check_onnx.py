@@ -9,6 +9,7 @@ import torch
 from loguru import logger
 
 from opensora.registry import MODELS, build_module
+from opensora.utils.custom.pos_emb import prepare_pos_emb
 
 
 def to_numpy(tensor):
@@ -64,42 +65,52 @@ inputs = torch.load(input_path, map_location=device)
 
 z_in = inputs["z_in"]
 t_in = inputs["t_in"]
-y = inputs["y"]
-mask = inputs["mask"]
-x_mask = inputs["x_mask"]
 fps = inputs["fps"]
+mha_kvs = inputs["mha_kvs"]
+mha_bias = inputs["mha_bias"]
 height = inputs["height"]
 width = inputs["width"]
 logger.info(
     f"""Inputs:
-z_in: {z_in.shape} {z_in.dtype}
-t_in: {t_in.shape} {t_in.dtype}
-y: {y.shape} {y.dtype}
-mask: {mask.shape} {mask.dtype}
-x_mask: {x_mask.shape} {x_mask.dtype}
-fps: {fps.shape} {fps.dtype}
-height: {height.shape} {height.dtype}
-width: {width.shape} {width.dtype}"""
+    z_in: {z_in.shape} {z_in.dtype}
+    t_in: {t_in.shape} {t_in.dtype}
+    attn_kv: {mha_kvs["mha_s00_k"].shape} {mha_kvs["mha_s00_k"].dtype}
+    attn_bias: {mha_bias.shape} {mha_bias.dtype}
+    fps: {fps.shape} {fps.dtype}
+    height: {height.shape} {height.dtype}
+    width: {width.shape} {width.dtype}"""
 )
 
-# ignore mask and x_mask
-mask = None
-x_mask = None
+# Prepare additional informations
+logger.info("Preparing positional embedding...")
+hidden_size = 1152
+num_heads = 16
+input_sq_size = 512
+
+prepare_pos_emb(
+    z_in[0].unsqueeze(0),
+    height,
+    width,
+    hidden_size=hidden_size,
+    input_sq_size=input_sq_size,
+)
 
 # TRUE OUTPUT
 logger.info("Running true inference...")
 start = time.time()
-true_output = model(z_in, t_in, y, mask=mask, x_mask=x_mask, fps=fps, height=height, width=width)
+true_output = model(z_in, t_in, fps, mha_bias, **mha_kvs)
 true_output = to_numpy(true_output)
 logger.success("Done after {:.2f}s!".format(time.time() - start))
 
+del model
+torch.cuda.empty_cache()
 
 # ONNX OUTPUT
 logger.info("Running ONNX inference...")
 start = time.time()
 
 # Prepare for model execution
-max_workspace_size = 10  # GB
+max_workspace_size = 40  # GB
 providers = [
     (
         "TensorrtExecutionProvider",
@@ -141,13 +152,12 @@ ort_session = ort.InferenceSession(args.onnx_path, sess_options=sess_opt, provid
 inputs = {
     "z_in": to_numpy(z_in),
     "t_in": to_numpy(t_in),
-    "y": to_numpy(y),
-    # "mask": to_numpy(mask),
-    # "x_mask": to_numpy(x_mask),
     "fps": to_numpy(fps),
-    "height": to_numpy(height),
-    "width": to_numpy(width),
+    "mha_bias": to_numpy(mha_bias),
 }
+
+for k, v in mha_kvs.items():
+    inputs[k] = to_numpy(v)
 
 # Run inference
 ort_outs = ort_session.run(None, inputs)

@@ -8,6 +8,7 @@ from mmengine.runner import set_random_seed
 from opensora.datasets.aspect import get_image_size, get_num_frames
 from opensora.registry import MODELS, SCHEDULERS, build_module
 from opensora.schedulers.rf.rectified_flow import timestep_transform
+from opensora.utils.custom.mha import prepare_mha_bias, prepare_mha_kv
 from opensora.utils.custom.y_embedder import get_y_embedder, load_y_embedder
 from opensora.utils.inference_utils import (
     apply_mask_strategy,
@@ -48,8 +49,8 @@ model_cfg = dict(
     type="STDiT3-XL/2",
     from_pretrained="hpcai-tech/OpenSora-STDiT-v3",
     qk_norm=True,
-    enable_flash_attn=False,
-    enable_layernorm_kernel=False,
+    enable_flash_attn=False,  # turn off flash-attn
+    enable_layernorm_kernel=False,  # turn off apex
 )
 vae_cfg = dict(
     type="OpenSoraVAE_V1_2",
@@ -195,6 +196,22 @@ logger.info("Convert image embedding to mask...")
 z_in = torch.cat([z, z], 0).to(dtype)
 t_in = torch.cat([t, t], 0).to(dtype)
 
+# KV and bias for MHA
+hidden_size = 1152
+num_heads = 16
+input_sq_size = 512
+
+mha_kvs = prepare_mha_kv(
+    model_args["y"],
+    model_args["mask"],
+    hidden_size=hidden_size,
+    num_heads=num_heads,
+    dtype=dtype,
+    device=device,
+    ckpt_dir="save/weights/kv_linear",
+)
+mha_bias = prepare_mha_bias(z, model_args["mask"], y_lens, dtype, device)
+
 # Unpack model args
 y = model_args["y"]
 mask = model_args["mask"]
@@ -204,8 +221,8 @@ height = model_args["height"]
 width = model_args["width"]
 logger.info(
     f"""Inputs:
-    y: {y.shape} {y.dtype}
-    mask: {mask.shape} {mask.dtype}
+    attn_kv: {mha_kvs["mha_s00_k"].shape} {mha_kvs["mha_s00_k"].dtype}
+    attn_bias: {mha_bias.shape} {mha_bias.dtype}
     fps: {fps.shape} {fps.dtype}
     height: {height.shape} {height.dtype}
     width: {width.shape} {width.dtype}"""
@@ -214,10 +231,9 @@ logger.info(
 inputs = {
     "z_in": z_in,
     "t_in": t_in,
-    "y": y,
-    "y_lens": y_lens,
-    "mask": mask,
     # "x_mask": x_mask,
+    "mha_kvs": mha_kvs,
+    "mha_bias": mha_bias,
     "fps": fps,
     "height": height,
     "width": width,

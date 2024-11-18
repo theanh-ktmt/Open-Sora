@@ -6,7 +6,6 @@ import torch
 from loguru import logger
 
 from opensora.registry import MODELS, build_module
-from opensora.utils.custom.mha import prepare_mha_bias, prepare_mha_kv
 from opensora.utils.custom.pos_emb import prepare_pos_emb
 
 # Load argument
@@ -55,48 +54,39 @@ inputs = torch.load(input_path, map_location=device)
 
 z_in = inputs["z_in"]
 t_in = inputs["t_in"]
-y = inputs["y"]
-y_lens = inputs["y_lens"]
-mask = inputs["mask"]
 fps = inputs["fps"]
+mha_kvs = inputs["mha_kvs"]
+mha_bias = inputs["mha_bias"]
 height = inputs["height"]
 width = inputs["width"]
 logger.info(
     f"""Inputs:
-z_in: {z_in.shape} {z_in.dtype}
-t_in: {t_in.shape} {t_in.dtype}
-y: {y.shape} {y.dtype}
-mask: {mask.shape} {mask.dtype}
-fps: {fps.shape} {fps.dtype}
-height: {height.shape} {height.dtype}
-width: {width.shape} {width.dtype}"""
+    z_in: {z_in.shape} {z_in.dtype}
+    t_in: {t_in.shape} {t_in.dtype}
+    attn_kv: {mha_kvs["mha_s00_k"].shape} {mha_kvs["mha_s00_k"].dtype}
+    attn_bias: {mha_bias.shape} {mha_bias.dtype}
+    fps: {fps.shape} {fps.dtype}
+    height: {height.shape} {height.dtype}
+    width: {width.shape} {width.dtype}"""
 )
 
 # Prepare additional informations
-logger.info("Preparing Multi-head Attention bias...")
-prepare_mha_bias(z_in[0].unsqueeze(0), mask, y_lens, dtype, device)
-# Prepare mha-kv
-logger.info("Preparing Multi-head Attention KV...")
-prepare_mha_kv(
-    y,
-    mask,
-    hidden_size=1152,
-    num_heads=16,
-    dtype=dtype,
-    device=device,
-    ckpt_dir="save/weights/kv_linear",
-)
 logger.info("Preparing positional embedding...")
+hidden_size = 1152
+num_heads = 16
+input_sq_size = 512
+
 prepare_pos_emb(
     z_in[0].unsqueeze(0),
     height,
     width,
-    hidden_size=1152,
-    input_sq_size=512,
+    hidden_size=hidden_size,
+    input_sq_size=input_sq_size,
 )
 
 # Convert to ONNX
 logger.info("Exporting ONNX models...")
+# NOTE: Skip dynamic shapes
 # dynamic_axes = {
 #     "z_in": {
 #         0: "2batchsize"
@@ -106,12 +96,12 @@ logger.info("Exporting ONNX models...")
 #     }
 # }
 
-input_names = [
-    "z_in",
-    "t_in",
-    "fps",
-]
-inputs = (z_in, t_in, fps)
+# Unpack mha_kvs
+k_list = sorted(mha_kvs.keys())
+v_list = [mha_kvs[k] for k in k_list]
+
+input_names = ["z_in", "t_in", "fps", "mha_bias", *k_list]
+inputs = (z_in, t_in, fps, mha_bias, *v_list)
 output_names = ["output"]
 
 with torch.no_grad():
