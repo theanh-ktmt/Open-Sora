@@ -33,6 +33,9 @@ class RFLOW:
         self.use_discrete_timesteps = use_discrete_timesteps
         self.use_timestep_transform = use_timestep_transform
 
+        self.device = torch.device("cuda")
+        self.dtype = torch.float
+
         self.scheduler = RFlowScheduler(
             num_timesteps=num_timesteps,
             num_sampling_steps=num_sampling_steps,
@@ -70,8 +73,7 @@ class RFLOW:
         latencies = {}
         is_profiling, ignore_steps, profile_dir = get_profiling_status()
 
-        dtype = model.x_embedder.proj.weight.dtype
-        z = z.to(dtype)
+        z = z.to(self.dtype)
 
         # TensorRT: Hard-coded config
         hidden_size = 1152
@@ -108,22 +110,22 @@ class RFLOW:
 
         # classifier-free guidance
         y_null = text_encoder.null(n)
-        model_args["y"] = torch.cat([model_args["y"], y_null], 0).to(dtype)
+        model_args["y"] = torch.cat([model_args["y"], y_null], 0).to(self.dtype)
 
         # TensorRT: Pre-compute text embedding information
         # Pre-compute y, y_lens
         self.y_embedder = get_y_embedder()
         model_args["y"], y_lens = self.encode_text(hidden_size=hidden_size, **model_args)
         # Prepare cross-attn bias
-        mha_bias = prepare_mha_bias(z, model_args["mask"], y_lens, dtype, device)
+        mha_bias = prepare_mha_bias(z, model_args["mask"], y_lens, self.dtype, self.device)
         # Prepare mha-kv
         mha_kvs = prepare_mha_kv(
             model_args["y"],
             model_args["mask"],
             hidden_size=hidden_size,
             num_heads=num_heads,
-            dtype=dtype,
-            device=device,
+            dtype=self.dtype,
+            device=self.device,
             ckpt_dir="save/weights/kv_linear",
         )
         # Prepare position embedding
@@ -156,7 +158,6 @@ class RFLOW:
             model_args,
             mha_kvs,
             mha_bias,
-            dtype,
             guidance_scale,
             progress=progress,
         )
@@ -194,7 +195,6 @@ class RFLOW:
         model_args,
         mha_kvs,
         mha_bias,
-        dtype,
         guidance_scale,
         progress=True,
         is_profiling=False,
@@ -224,11 +224,13 @@ class RFLOW:
                 noise_added = mask_t_upper
 
             # classifier-free guidance
-            z_in = torch.cat([z, z], 0).to(dtype)
-            t = torch.cat([t, t], 0).to(dtype)
+            z_in = torch.cat([z, z], 0).to(self.dtype)
+            t = torch.cat([t, t], 0).to(self.dtype)
 
             start = time.time()
-            diffuse_step = partial(model, z_in, t, mha_bias=mha_bias, **mha_kvs, **model_args)
+            # temporarily remove model_args (not used)
+            # diffuse_step = partial(model, z_in, t, mha_bias=mha_bias, **mha_kvs, **model_args)
+            diffuse_step = partial(model, x=z_in, timestep=t, fps=model_args["fps"], mha_bias=mha_bias, **mha_kvs)
             if is_profiling and i >= ignore_steps:
                 with record_function("video_generation"):
                     pred = diffuse_step().chunk(2, dim=1)[0]

@@ -82,8 +82,7 @@ def parse_args(training=False):
         parser.add_argument("--record-time", default=False, action="store_true", help="record time of each part")
 
     # TensorRT
-    parser.add_argument("--trt-onnx-path", type=str, default="save/onnx/ckpt/stdit3.onnx", help="Path to ONNX file.")
-    parser.add_argument("--trt-cache-dir", type=str, default="save/onnx/cache", help="Path to cache directory")
+    parser.add_argument("--trt-engine-path", type=str, help="Path to TensorRT engine file.")
 
     return parser.parse_args()
 

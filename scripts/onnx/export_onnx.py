@@ -61,13 +61,13 @@ height = inputs["height"]
 width = inputs["width"]
 logger.info(
     f"""Inputs:
-    z_in: {z_in.shape} {z_in.dtype}
-    t_in: {t_in.shape} {t_in.dtype}
-    attn_kv: {mha_kvs["mha_s00_k"].shape} {mha_kvs["mha_s00_k"].dtype}
-    attn_bias: {mha_bias.shape} {mha_bias.dtype}
-    fps: {fps.shape} {fps.dtype}
-    height: {height.shape} {height.dtype}
-    width: {width.shape} {width.dtype}"""
+    z_in: {z_in.shape} {z_in.dtype} {z_in.device}
+    t_in: {t_in.shape} {t_in.dtype} {t_in.device}
+    attn_kv: {mha_kvs["mha_s00_k"].shape} {mha_kvs["mha_s00_k"].dtype} {mha_kvs["mha_s00_k"].device}
+    attn_bias: {mha_bias.shape} {mha_bias.dtype} {mha_bias.device}
+    fps: {fps.shape} {fps.dtype} {fps.device}
+    height: {height.shape} {height.dtype} {height.device}
+    width: {width.shape} {width.dtype} {width.device}"""
 )
 
 # Prepare additional informations
@@ -100,7 +100,7 @@ logger.info("Exporting ONNX models...")
 k_list = sorted(mha_kvs.keys())
 v_list = [mha_kvs[k] for k in k_list]
 
-input_names = ["z_in", "t_in", "fps", "mha_bias", *k_list]
+input_names = ["x", "timestep", "fps", "mha_bias", *k_list]
 inputs = (z_in, t_in, fps, mha_bias, *v_list)
 output_names = ["output"]
 
@@ -114,5 +114,6 @@ with torch.no_grad():
         input_names=input_names,
         output_names=output_names,
         dynamic_axes=None,
+        verbose=True,
     )
 logger.success("ONNX model saved at {}!".format(args.onnx_path))

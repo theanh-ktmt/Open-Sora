@@ -46,6 +46,7 @@ def prepare_mha_kv(
         torch.cuda.empty_cache()
 
     logger.success("Done preparing KV for Multi-head Attention!")
+    logger.info("MHA KVs: {} {}".format(mha_kvs["mha_s00_k"].shape, mha_kvs["mha_s00_k"].device))
     return mha_kvs
 
 
@@ -72,5 +73,6 @@ def prepare_mha_bias(
     padded_len = B * max_len - B * num_tokens
     mha_bias = F.pad(attn_bias, (0, padded_len), mode="constant", value=-float("inf"))
     logger.success("Done preparing bias for Multi-head Attention!")
+    logger.info("MHA Bias: {} {}".format(mha_bias.shape, mha_bias.device))
 
     return mha_bias

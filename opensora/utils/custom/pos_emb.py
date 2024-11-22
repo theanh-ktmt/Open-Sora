@@ -27,6 +27,7 @@ def prepare_pos_emb(
     # handle device, dtype in pos_emb forward
     POS_EMB = pos_embed(x, H, W, scale=scale, base_size=base_size)
     logger.success("Done preparing position embedding for STDiT3 model!")
+    logger.info("Position Embedding: {} {}".format(POS_EMB.shape, POS_EMB.device))
 
 
 def get_pos_emb() -> Optional[torch.tensor]:

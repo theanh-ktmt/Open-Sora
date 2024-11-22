@@ -60,7 +60,7 @@ def memory_efficient_attention(
     if attn_bias is not None:
         attn = attn + attn_bias
     attn = attn.softmax(-1)
-    attn = F.dropout(attn, p)
+    attn = F.dropout(attn, p, training=False)
     attn = torch.matmul(attn, value)
 
     # Transpose back to [B, M, H, K]

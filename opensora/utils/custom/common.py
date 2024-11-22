@@ -1,5 +1,6 @@
 from typing import Tuple
 
+import numpy as np
 import torch
 
 
@@ -27,3 +28,13 @@ def get_dynamic_size(x, patch_size=(1, 2, 2)) -> Tuple[int, int, int]:
     H = H // patch_size[1]
     W = W // patch_size[2]
     return (T, H, W)
+
+
+def to_numpy(tensor: torch.Tensor) -> np.ndarray:
+    """Convert torch.Tensor to numpy array."""
+    return tensor.detach().cpu().numpy() if tensor.requires_grad else tensor.cpu().numpy()
+
+
+def to_tensor(array: np.ndarray, device: torch.device = torch.device("cpu")):
+    """Convert numpy array to torch.Tensor."""
+    return torch.from_numpy(array).to(device)

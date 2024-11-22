@@ -1,5 +1,6 @@
 import os
 import time
+import warnings
 from pprint import pformat
 
 import colossalai
@@ -14,7 +15,7 @@ from opensora.datasets import save_sample
 from opensora.datasets.aspect import get_image_size, get_num_frames
 
 # For tensorRT
-from opensora.models.tensorrt.stdit3 import STDiT3TRT
+from opensora.models.stdit.stdit3_tensorrt import STDiT3TRT
 from opensora.models.text_encoder.t5 import text_preprocessing
 from opensora.registry import MODELS, SCHEDULERS, build_module
 from opensora.utils.config_utils import parse_configs
@@ -96,37 +97,44 @@ def main():
     # == build diffusion model ==
     input_size = (num_frames, *image_size)
     latent_size = vae.get_latent_size(input_size)
-    model = (
-        build_module(
-            cfg.model,
-            MODELS,
-            input_size=latent_size,
-            in_channels=vae.out_channels,
-            caption_channels=text_encoder.output_dim,
-            model_max_length=text_encoder.model_max_length,
-            enable_sequence_parallelism=enable_sequence_parallelism,
+
+    if is_tensorrt_enabled():
+        assert "STDiT3" in cfg.model.type, "Model '{}' is not supported by TensorRT at the moment.".format(
+            cfg.model.type
         )
-        .to(device, dtype)
-        .eval()
-    )
+        trt_engine_path = cfg.get("trt_engine_path", "./stdit3.engine")
+        model = STDiT3TRT(trt_engine_path)
+        logger.info("Built TensorRT Engine from {}.".format(trt_engine_path))
+    else:
+        model = (
+            build_module(
+                cfg.model,
+                MODELS,
+                input_size=latent_size,
+                in_channels=vae.out_channels,
+                caption_channels=text_encoder.output_dim,
+                model_max_length=text_encoder.model_max_length,
+                enable_sequence_parallelism=enable_sequence_parallelism,
+            )
+            .to(device, dtype)
+            .eval()
+        )
+
     # text_encoder.y_embedder = model.y_embedder  # HACK: for classifier-free guidance
     load_y_embedder("save/weights/y_embedder.pth", device, dtype)
     text_encoder.y_embedder = get_y_embedder()
     # torch.save(text_encoder.y_embedder, "y_embedder.pth")
 
     if is_torch_compile_enabled():
+        if is_tensorrt_enabled():
+            warnings.warn("TensorRT and torch.compile are not working along! Shutting down.")
+            exit(0)
         model = compile_module(model)
-
-    if is_tensorrt_enabled():
-        del model  # Remove old model
-
-        assert "STDiT3" in cfg.model.type, "Model '{}' is not supported by TensorRT at the moment.".format(
-            cfg.model.type
-        )
-        model = STDiT3TRT(cfg.trt_onnx_path, cfg.trt_cache_dir, fp16=False, max_workspace_size=10)
 
     # == build scheduler ==
     scheduler = build_module(cfg.scheduler, SCHEDULERS)
+    scheduler.device = device
+    scheduler.dtype = dtype
 
     # ======================================================
     # inference

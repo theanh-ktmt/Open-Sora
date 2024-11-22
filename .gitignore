@@ -208,3 +208,5 @@ save
 tensorrt/resources
 scripts/play
 data-gym-cache/
+*.onnx*
+*.engine*
