@@ -23,12 +23,25 @@ def is_tensorrt_enabled() -> bool:
 def build_engine(
     onnx_file_path: str,
     save_path: str,
-    workspace_size: int = 1,
-    use_fp16: bool = False,
-    layers_to_keep_fp32: List[str] = [],
-    verbose: bool = True,
+    workspace_size: int = 80,
+    fp16_layers: List[trt.LayerType] = [],
+    strict: bool = False,
+    verbose: bool = False,
 ):
-    """Build/Serialize TensorRT engine."""
+    """
+    Build and Serialize a TensorRT engine from an ONNX file.
+
+    Args:
+        onnx_file_path (str): Path to the ONNX model file.
+        save_path (str): Path to save the serialized TensorRT engine.
+        workspace_size (int): Maximum GPU memory (in GB) that TensorRT can use for tactic selection.
+        fp16_layers (List[trt.LayerType]): List of layers to be kept at FP32.
+        strict (bool): If True, enforce strict precision constraints. If False, prefer precision constraints.
+        verbose (bool): If True, enable verbose logging.
+
+    Returns:
+        None: If the engine creation fails, the function returns None.
+    """
     # Initialize Logger
     trt_logger = trt.Logger(trt.Logger.VERBOSE) if verbose else trt.Logger()
 
@@ -54,15 +67,32 @@ def build_engine(
         # Allow TensorRT to use up to workspace_size GB of GPU memory for tactic selection
         if workspace_size != 0:
             config.set_memory_pool_limit(trt.MemoryPoolType.WORKSPACE, workspace_size * (1024 * 1024 * 1024))
-        # Use FP16 mode if possible
-        if use_fp16 and builder.platform_has_fast_fp16:
+
+        # Enable FP16 if specified
+        if len(fp16_layers) > 0:
             config.set_flag(trt.BuilderFlag.FP16)
 
-        # Enforce certain layers to remain in FP32
-        for layer_name in layers_to_keep_fp32:
-            layer = network.get_layer(network.get_layer_index(layer_name))
-            layer.precision = trt.DataType.FLOAT
-            layer.set_output_type(0, trt.DataType.FLOAT)
+        # TensorRT behavior towards the precision constraints
+        if not strict:
+            config.set_flag(trt.BuilderFlag.PREFER_PRECISION_CONSTRAINTS)
+        else:
+            config.set_flag(trt.BuilderFlag.OBEY_PRECISION_CONSTRAINTS)
+
+        # Precision constraints
+        for i in range(network.num_layers):
+            layer = network.get_layer(i)
+            if layer.type in fp16_layers:
+                layer.precision = trt.DataType.HALF
+                for j in range(layer.num_outputs):
+                    layer.set_output_type(j, trt.DataType.HALF)
+                if verbose:
+                    logger.info(f"Configure layer '{layer.name}' at {trt.DataType.HALF}")
+            # else:
+            #     layer.precision = trt.DataType.FLOAT
+            #     for j in range(layer.num_outputs):
+            #         layer.set_output_type(j, trt.DataType.FLOAT)
+            #     if verbose:
+            #         logger.info(f"Configure layer '{layer.name}' at {trt.DataType.FLOAT}")
 
         # Generate TensorRT engine optimized for the target platform
         logger.info("Building engine...")
