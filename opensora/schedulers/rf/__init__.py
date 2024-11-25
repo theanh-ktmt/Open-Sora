@@ -71,7 +71,7 @@ class RFLOW:
         return_latencies=False,
     ):
         latencies = {}
-        is_profiling, ignore_steps, profile_dir = get_profiling_status()
+        is_profiling, _, profile_dir = get_profiling_status()
 
         z = z.to(self.dtype)
 
@@ -171,7 +171,6 @@ class RFLOW:
             ) as prof:
                 z, latencies["backbone"] = diffuse_process(
                     is_profiling=True,
-                    ignore_steps=ignore_steps,
                 )
 
             # save profiling data
@@ -198,7 +197,6 @@ class RFLOW:
         guidance_scale,
         progress=True,
         is_profiling=False,
-        ignore_steps=1,
     ):
         if mask is not None:
             noise_added = torch.zeros_like(mask, dtype=torch.bool)
@@ -231,7 +229,7 @@ class RFLOW:
             # temporarily remove model_args (not used)
             # diffuse_step = partial(model, z_in, t, mha_bias=mha_bias, **mha_kvs, **model_args)
             diffuse_step = partial(model, x=z_in, timestep=t, fps=model_args["fps"], mha_bias=mha_bias, **mha_kvs)
-            if is_profiling and i >= ignore_steps:
+            if is_profiling:
                 with record_function("video_generation"):
                     pred = diffuse_step().chunk(2, dim=1)[0]
             else:

@@ -14,26 +14,26 @@ def get_profiling_status() -> Tuple[bool, int, Path]:
 
     Returns:
         bool: If profiling is turned on or off.
-        bool: Number steps to be ignored when warming up.
+        int: Number samples to be ignored when warming up.
         Path: Path to output directory.
     """
     global IS_PROFILING
-    global IGNORE_STEPS
+    global IGNORE_SAMPLES
     global PROFILE_OUTDIR
 
-    if IS_PROFILING is None or IGNORE_STEPS is None or PROFILE_OUTDIR is None:
+    if IS_PROFILING is None or IGNORE_SAMPLES is None or PROFILE_OUTDIR is None:
         IS_PROFILING = os.environ.get("IS_PROFILING", "0") == "1"
-        IGNORE_STEPS = int(os.environ.get("IGNORE_STEPS", "1"))
+        IGNORE_SAMPLES = int(os.environ.get("IGNORE_SAMPLES", "0"))
         PROFILE_OUTDIR = Path(os.environ.get("PROFILE_OUTDIR", "save/profile"))
         PROFILE_OUTDIR.mkdir(parents=True, exist_ok=True)
 
         logger.info(
             """Profiling status:
         - IS_PROFILING: {}
-        - IGNORE_STEPS: {} steps
+        - IGNORE_SAMPLES: {} samples
         - PROFILE_OUTDIR: {}""".format(
-                IS_PROFILING, IGNORE_STEPS, PROFILE_OUTDIR
+                IS_PROFILING, IGNORE_SAMPLES, PROFILE_OUTDIR
             )
         )
 
-    return IS_PROFILING, IGNORE_STEPS, PROFILE_OUTDIR
+    return IS_PROFILING, IGNORE_SAMPLES, PROFILE_OUTDIR

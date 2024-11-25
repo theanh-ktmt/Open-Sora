@@ -1,5 +1,5 @@
 #!/bin/bash
-ENABLE_TENSORRT=1 CUDA_VISIBLE_DEVICES=1 \
+ENABLE_TENSORRT=1 CUDA_VISIBLE_DEVICES=5 \
 python3 scripts/inference.py configs/anhtt/inference.py \
   --num-frames "4s" --resolution "720p" \
   --num-sampling-steps 30 --dtype "fp32" \

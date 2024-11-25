@@ -49,8 +49,8 @@ def main():
             trt.LayerType.ELEMENTWISE,
             trt.LayerType.MATRIX_MULTIPLY,
         ],
-        strict=True,
-        verbose=True,
+        strict=False,
+        verbose=False,
     )
 
 

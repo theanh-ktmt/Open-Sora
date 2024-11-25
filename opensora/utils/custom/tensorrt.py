@@ -2,6 +2,7 @@ import os
 import time
 from typing import List, Optional
 
+import onnx
 import tensorrt as trt
 from loguru import logger
 
@@ -66,33 +67,50 @@ def build_engine(
         logger.info("Prepare builder config...")
         # Allow TensorRT to use up to workspace_size GB of GPU memory for tactic selection
         if workspace_size != 0:
+            logger.info("- Workspace size = {}GB".format(workspace_size))
             config.set_memory_pool_limit(trt.MemoryPoolType.WORKSPACE, workspace_size * (1024 * 1024 * 1024))
 
         # Enable FP16 if specified
         if len(fp16_layers) > 0:
+            logger.info("- Enable FP16".format(workspace_size))
             config.set_flag(trt.BuilderFlag.FP16)
 
         # TensorRT behavior towards the precision constraints
-        if not strict:
-            config.set_flag(trt.BuilderFlag.PREFER_PRECISION_CONSTRAINTS)
-        else:
-            config.set_flag(trt.BuilderFlag.OBEY_PRECISION_CONSTRAINTS)
+        constraint_flag = (
+            trt.BuilderFlag.OBEY_PRECISION_CONSTRAINTS if strict else trt.BuilderFlag.PREFER_PRECISION_CONSTRAINTS
+        )
+        logger.info("- Turn on '{}'".format(constraint_flag))
+        config.set_flag(constraint_flag)
 
         # Precision constraints
+        int_or_bool_layers = get_int_or_bool_layers(onnx_file_path)
         for i in range(network.num_layers):
             layer = network.get_layer(i)
+
+            if (
+                layer.name in int_or_bool_layers
+                or "ONNXTRT_ShapeTensorFromDims" in layer.name
+                or layer.type == trt.LayerType.CAST
+            ):
+                # if verbose:
+                logger.info(f"Skip layer '{layer.name}' ({layer.type})")
+                continue
+
             if layer.type in fp16_layers:
                 layer.precision = trt.DataType.HALF
                 for j in range(layer.num_outputs):
-                    layer.set_output_type(j, trt.DataType.HALF)
+                    # element-wise output has to be FLOAT
+                    layer.set_output_type(
+                        j, trt.DataType.HALF if "ONNXTRT_ShapeElementWise" not in layer.name else trt.DataType.FLOAT
+                    )
                 if verbose:
-                    logger.info(f"Configure layer '{layer.name}' at {trt.DataType.HALF}")
-            # else:
-            #     layer.precision = trt.DataType.FLOAT
-            #     for j in range(layer.num_outputs):
-            #         layer.set_output_type(j, trt.DataType.FLOAT)
-            #     if verbose:
-            #         logger.info(f"Configure layer '{layer.name}' at {trt.DataType.FLOAT}")
+                    logger.info(f"Configure layer '{layer.name}' ({layer.type}) at {trt.DataType.HALF}")
+            else:
+                layer.precision = trt.DataType.FLOAT
+                for j in range(layer.num_outputs):
+                    layer.set_output_type(j, trt.DataType.FLOAT)
+                if verbose:
+                    logger.info(f"Configure layer '{layer.name}' ({layer.type}) at {trt.DataType.FLOAT}")
 
         # Generate TensorRT engine optimized for the target platform
         logger.info("Building engine...")
@@ -106,3 +124,17 @@ def build_engine(
         with open(save_path, "wb") as f:
             f.write(serialized_engine)
         logger.info("Write serialized engine to {}!".format(save_path))
+
+
+def get_int_or_bool_layers(onnx_path):
+    """Return names of layers that have any integer data type or BOOL data type."""
+    int_or_bool_layers = []
+
+    int_types = [onnx.TensorProto.INT8, onnx.TensorProto.INT16, onnx.TensorProto.INT32, onnx.TensorProto.INT64]
+
+    model = onnx.load(onnx_path)
+    for initializer in model.graph.initializer:
+        if initializer.data_type in int_types or initializer.data_type == onnx.TensorProto.BOOL:
+            int_or_bool_layers.append(initializer.name)
+
+    return int_or_bool_layers

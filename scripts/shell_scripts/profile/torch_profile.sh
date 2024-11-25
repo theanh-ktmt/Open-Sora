@@ -1,6 +1,5 @@
 #!/bin/bash
-IS_PROFILING=1 IGNORE_STEPS=1 \
-PROFILE_OUTDIR=save/profile/pt-rocm-tc/mi300-fp16/720p-4s/torch_profile \
+IS_PROFILING=1 PROFILE_OUTDIR=save/profile/pt-rocm-tc/mi300-fp16/720p-4s/torch_profile \
 MIOPEN_DISABLE_CACHE=1 HIP_VISIBLE_DEVICES=6 \
 ENABLE_XFORMERS=0 ENABLE_TORCHCOMPILE=1 \
 python3 scripts/inference.py configs/anhtt/inference.py \

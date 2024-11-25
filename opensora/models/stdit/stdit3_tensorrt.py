@@ -1,5 +1,4 @@
 import numpy as np
-import pycuda.autoinit
 import pycuda.driver as cuda
 import tensorrt as trt
 import torch
@@ -9,9 +8,10 @@ from opensora.utils.custom.common import to_numpy, to_tensor
 
 
 class STDiT3TRT:
-    def __init__(self, engine_path: str, verbose: bool = True):
+    def __init__(self, engine_path: str, verbose: bool = False):
         # prepare trt_logger
-        self.trt_logger = trt.Logger(trt.Logger.VERBOSE) if verbose else trt.Logger()
+        self.verbose = verbose
+        self.trt_logger = trt.Logger(trt.Logger.VERBOSE) if self.verbose else trt.Logger()
 
         # load engine from path
         logger.info("Loading TensorRT engine from {}.".format(engine_path))
@@ -61,24 +61,28 @@ class STDiT3TRT:
 
         # for multiple inputs
         # copy input data to GPU
-        logger.info("Copy input from CPU to GPU...")
+        if self.verbose:
+            logger.info("Copy input from CPU to GPU...")
         for input in self.inputs:
             input_data = to_numpy(kwargs[input.name])
             np.copyto(input.host, input_data.ravel())
             cuda.memcpy_htod_async(input.device, input.host, self.stream)
 
         # map context with corresponding GPU memory buffer
-        logger.info("Map context with GPU address...")
+        if self.verbose:
+            logger.info("Map context with GPU address...")
         for i in range(self.engine.num_io_tensors):
             self.context.set_tensor_address(self.engine.get_tensor_name(i), self.bindings[i])
 
         # run inference
-        logger.info("Run inference...")
+        if self.verbose:
+            logger.info("Run inference...")
         self.context.execute_async_v3(stream_handle=self.stream.handle)
 
         # for single output
         # copy output to CPU
-        logger.info("Copy output back to CPU")
+        if self.verbose:
+            logger.info("Copy output back to CPU")
         cuda.memcpy_dtoh_async(self.outputs[0].host, self.outputs[0].device, self.stream)
 
         # synchronize stream
