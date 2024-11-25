@@ -1,9 +1,8 @@
 import os
 import time
-from typing import List, Optional
+from typing import Any, List, Optional
 
 import onnx
-import tensorrt as trt
 from loguru import logger
 
 ENABLE_TENSORRT: Optional[bool] = None
@@ -25,7 +24,7 @@ def build_engine(
     onnx_file_path: str,
     save_path: str,
     workspace_size: int = 80,
-    fp16_layers: List[trt.LayerType] = [],
+    fp16_layers: List[Any] = [],
     strict: bool = False,
     verbose: bool = False,
 ):
@@ -43,6 +42,8 @@ def build_engine(
     Returns:
         None: If the engine creation fails, the function returns None.
     """
+    import tensorrt as trt
+
     # Initialize Logger
     trt_logger = trt.Logger(trt.Logger.VERBOSE) if verbose else trt.Logger()
 

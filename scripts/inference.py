@@ -13,9 +13,6 @@ from tqdm import tqdm
 from opensora.acceleration.parallel_states import set_sequence_parallel_group
 from opensora.datasets import save_sample
 from opensora.datasets.aspect import get_image_size, get_num_frames
-
-# For tensorRT
-from opensora.models.stdit.stdit3_tensorrt import STDiT3TRT
 from opensora.models.text_encoder.t5 import text_preprocessing
 from opensora.registry import MODELS, SCHEDULERS, build_module
 from opensora.utils.config_utils import parse_configs
@@ -99,6 +96,8 @@ def main():
     latent_size = vae.get_latent_size(input_size)
 
     if is_tensorrt_enabled():
+        from opensora.models.stdit.stdit3_tensorrt import STDiT3TRT
+
         assert "STDiT3" in cfg.model.type, "Model '{}' is not supported by TensorRT at the moment.".format(
             cfg.model.type
         )
