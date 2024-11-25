@@ -60,15 +60,15 @@ VIDEO_GENERATION_PROMPTS = VIDEO_GENERATION_PROMPTS[:N_PROMPTS]
 
 VIDEO_REFERENCES = ["save/references/sample.jpg"] * len(VIDEO_GENERATION_PROMPTS)
 VIDEO_RESOLUTIONS = [
-    "720p",
     "144p",
     "240p",
     "360p",
     "480p",
+    "720p",
 ]
 VIDEO_LENGTHS = [
-    "4s",
     "2s",
+    "4s",
     "8s",
     "16s",
 ]
