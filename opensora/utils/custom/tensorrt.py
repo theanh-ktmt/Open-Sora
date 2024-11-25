@@ -92,8 +92,8 @@ def build_engine(
                 or "ONNXTRT_ShapeTensorFromDims" in layer.name
                 or layer.type == trt.LayerType.CAST
             ):
-                # if verbose:
-                logger.info(f"Skip layer '{layer.name}' ({layer.type})")
+                if verbose:
+                    logger.info(f"Skip layer '{layer.name}' ({layer.type})")
                 continue
 
             if layer.type in fp16_layers:
