@@ -20,8 +20,8 @@ from opensora.datasets.aspect import get_image_size, get_num_frames
 from opensora.models.text_encoder.t5 import text_preprocessing
 from opensora.registry import MODELS, SCHEDULERS, build_module
 from opensora.utils.config_utils import parse_configs
+from opensora.utils.custom.compile import compile_module, is_torch_compile_enabled
 from opensora.utils.custom.tensorrt import is_tensorrt_enabled
-from opensora.utils.custom.torchcompile import compile_module, is_torch_compile_enabled
 from opensora.utils.custom.y_embedder import get_y_embedder, load_y_embedder
 from opensora.utils.inference_utils import (
     add_watermark,
