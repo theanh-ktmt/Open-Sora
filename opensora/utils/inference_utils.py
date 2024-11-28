@@ -10,8 +10,8 @@ from torch.profiler import ProfilerActivity, profile, record_function
 
 from opensora.datasets import IMG_FPS
 from opensora.datasets.utils import read_from_path
+from opensora.utils.custom.profile import get_profiling_status
 from opensora.utils.misc import create_logger
-from opensora.utils.profile import get_profiling_status
 
 logger = create_logger()
 

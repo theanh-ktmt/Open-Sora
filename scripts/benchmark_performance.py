@@ -22,6 +22,8 @@ from opensora.models.tensorrt.stdit3 import STDiT3TRT
 from opensora.models.text_encoder.t5 import text_preprocessing
 from opensora.registry import MODELS, SCHEDULERS, build_module
 from opensora.utils.config_utils import parse_configs
+from opensora.utils.custom.compile import compile_module, is_torch_compile_enabled
+from opensora.utils.custom.tensorrt import is_tensorrt_enabled
 from opensora.utils.inference_utils import (
     add_watermark,
     append_generated,
@@ -40,8 +42,6 @@ from opensora.utils.inference_utils import (
     split_prompt,
 )
 from opensora.utils.misc import create_logger, is_distributed, is_main_process, to_torch_dtype
-from opensora.utils.tensorrt import is_tensorrt_enabled
-from opensora.utils.torchcompile import compile_module, is_torch_compile_enabled
 
 VIDEO_GENERATION_PROMPTS = [
     "A day in the life of a busy city street from dawn to dusk.",

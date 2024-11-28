@@ -24,7 +24,7 @@ from timm.models.vision_transformer import Mlp
 
 from opensora.acceleration.communications import all_to_all, split_forward_gather_backward
 from opensora.acceleration.parallel_states import get_sequence_parallel_group
-from opensora.utils.xformers import block_diagonal_mask, is_xformers_enabled, memory_efficient_attention
+from opensora.utils.custom.xformers import block_diagonal_mask, is_xformers_enabled, memory_efficient_attention
 
 # Import xformers optional
 enable_xformers = is_xformers_enabled()

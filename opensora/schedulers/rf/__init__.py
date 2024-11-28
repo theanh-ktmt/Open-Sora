@@ -6,8 +6,8 @@ from tqdm import tqdm
 
 from opensora.registry import SCHEDULERS
 from opensora.schedulers.rf.rectified_flow import RFlowScheduler, timestep_transform
+from opensora.utils.custom.profile import get_profiling_status
 from opensora.utils.misc import create_logger
-from opensora.utils.profile import get_profiling_status
 
 logger = create_logger()
 

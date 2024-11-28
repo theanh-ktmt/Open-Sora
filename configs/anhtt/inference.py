@@ -5,7 +5,7 @@ fps = 24
 frame_interval = 1
 save_fps = 24
 
-save_dir = "/home/tran/workspace/Open-Sora/save/inference/test"
+save_dir = "save/inference/test"
 seed = 42
 batch_size = 1
 multi_resolution = "STDiT2"
