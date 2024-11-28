@@ -1,16 +1,16 @@
+import gemm_ck
 import torch
-
-FP16_GEMM_PREFIX = "gemm_Afp16_Bfp16_Cfp16"
-FP16_MATMULS = {name: locals()[name] for name in locals() if name.startswith(FP16_GEMM_PREFIX)}
 
 
 def get_ck_matmul_op(M: int, N: int, K: int, dtype: torch.dtype):
     """Get CK Matrix Multiplication specific for M, N, K and dtype."""
+    FP16_GEMM_PREFIX = "gemm_Afp16_Bfp16_Cfp16"
+
     if dtype == torch.float16:
         op_name = f"{FP16_GEMM_PREFIX}_{M}x{N}x{K}"
-        if op_name in FP16_MATMULS:
-            return FP16_MATMULS[op_name]
-        raise NotImplementedError(f"Gemm {op_name} not found!")
+        if op_name in dir(gemm_ck):
+            return getattr(gemm_ck, op_name)
+        raise NotImplementedError(f"Gemm '{op_name}' not found!")
 
     raise NotImplementedError(f"Matrix multiplication for data type {dtype} is not supported.")
 
