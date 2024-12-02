@@ -1,6 +1,5 @@
 #!/bin/bash
 GPU=${1:-0}
-export ENABLE_TENSORRT=1
 export CUDA_VISIBLE_DEVICES=$GPU
 
 nsys profile -t cuda --output=opensora_profile --sample=none \

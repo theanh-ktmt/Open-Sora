@@ -12,14 +12,10 @@ from tqdm import tqdm
 from opensora.acceleration.parallel_states import set_sequence_parallel_group
 from opensora.datasets import save_sample
 from opensora.datasets.aspect import get_image_size, get_num_frames
-
-# For tensorRT
-from opensora.models.tensorrt.stdit3 import STDiT3TRT
 from opensora.models.text_encoder.t5 import text_preprocessing
 from opensora.registry import MODELS, SCHEDULERS, build_module
 from opensora.utils.config_utils import parse_configs
-from opensora.utils.custom.compile import compile_module, is_torch_compile_enabled
-from opensora.utils.custom.tensorrt import is_tensorrt_enabled
+from opensora.utils.custom.layers import replace_with_custom_layers
 from opensora.utils.inference_utils import (
     add_watermark,
     append_generated,
@@ -110,20 +106,8 @@ def main():
     )
     text_encoder.y_embedder = model.y_embedder  # HACK: for classifier-free guidance
 
-    if is_torch_compile_enabled():
-        logger.info("torch.compile is enabled. Run compilling...")
-        text_encoder.t5.model = compile_module(text_encoder.t5.model)
-        vae = compile_module(vae)
-        model = compile_module(model)
-        logger.info("Compiling done!")
-
-    if is_tensorrt_enabled():
-        del model  # Remove old model
-
-        assert "STDiT3" in cfg.model.type, "Model '{}' is not supported by TensorRT at the moment.".format(
-            cfg.model.type
-        )
-        model = STDiT3TRT(cfg.trt_onnx_path, cfg.trt_cache_dir, fp16=False, max_workspace_size=10)
+    # replace module layers with customed layers
+    model = replace_with_custom_layers(model)
 
     # == build scheduler ==
     scheduler = build_module(cfg.scheduler, SCHEDULERS)
