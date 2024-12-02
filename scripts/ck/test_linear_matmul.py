@@ -5,7 +5,7 @@ import torch.nn as nn
 from loguru import logger
 from tqdm import tqdm
 
-from opensora.models.layers.custom import CustomedCKLinear
+from opensora.utils.custom.layers import CustomedCKLinear
 
 torch.manual_seed(42)
 
