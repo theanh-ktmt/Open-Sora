@@ -12,7 +12,7 @@ torch.manual_seed(42)
 linear = nn.Linear(1152, 4608, dtype=torch.float16, device="cuda")
 ck_linear = CustomedCKLinear(linear)
 
-input = torch.rand(844, 256, 1152, dtype=torch.float16, device="cuda")
+input = torch.rand(2, 108000, 1152, dtype=torch.float16, device="cuda")
 
 # Correctness
 out1 = linear(input)
