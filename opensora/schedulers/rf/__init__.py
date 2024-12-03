@@ -141,6 +141,7 @@ class RFLOW:
 
         latency = 0
         for i, t in progress_wrap(enumerate(timesteps)):
+            logger.info("Processing step {}...".format(i))
             # mask for adding noise
             if mask is not None:
                 mask_t = mask * self.num_timesteps

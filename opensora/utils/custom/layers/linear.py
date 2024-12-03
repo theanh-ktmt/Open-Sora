@@ -1,7 +1,10 @@
 import torch
 import torch.nn as nn
 
-from opensora.utils.custom.operators.matmul import ck_matmul_linear, get_ck_matmul_ops
+from opensora.utils.custom.operators.matmul import ck_matmul_linear, get_available_shapes
+
+SUPPORTED_DTYPES = [torch.float16]
+SUPPORTED_DEVICES = ["cuda"]
 
 
 class CustomedCKLinear(nn.Module):
@@ -15,13 +18,22 @@ class CustomedCKLinear(nn.Module):
 
         self.dtype = linear.weight.dtype
         self.device = linear.weight.device
-        assert self.dtype == torch.float16, f"Data type '{self.dtype}' is not supported!"
-        assert "cuda" in str(self.device), f"Device '{self.device}' is not supported!"
+        assert (
+            self.dtype in SUPPORTED_DTYPES
+        ), f"Data type '{self.dtype}' is not supported. Supported dtypes: {SUPPORTED_DTYPES}"
+        assert (
+            self.device.type in SUPPORTED_DEVICES
+        ), f"Device '{self.device}' is not supported. Supported devices: {SUPPORTED_DEVICES}"
 
-        self.matmul_ops = sorted(get_ck_matmul_ops(self.in_channels, self.out_channels, self.dtype), key=lambda x: x[0])
+        self.available_shapes = sorted(get_available_shapes(self.in_channels, self.out_channels))
+
+    def __repr__(self):
+        return (
+            f"CKLinear(in_features={self.in_channels}, out_features={self.out_channels}, bias={self.bias is not None})"
+        )
 
     def forward(self, x: torch.Tensor):
-        out = ck_matmul_linear(self.matmul_ops, x.contiguous(), self.weight_T, dtype=self.dtype, device=self.device)
+        out = ck_matmul_linear(x.contiguous(), self.weight_T, self.available_shapes)
 
         if self.bias is not None:
             out = out + self.bias

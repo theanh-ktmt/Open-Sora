@@ -20,12 +20,12 @@ def replace_with_custom_layers(module: nn.Module) -> nn.Module:
                 try:
                     custom_linear = CustomedCKLinear(child)
                     setattr(child_module, name, custom_linear)
-                    logger.info(f"Replaced layer '{name}' with '{[op[1].__name__ for op in custom_linear.matmul_ops]}'")
+                    logger.info(f"Replaced layer '{name}' with '{[repr(op[1]) for op in custom_linear.matmul_ops]}'")
                 except Exception as e:
                     logger.warning(f"Could not replace layer '{name}': {e}")
             else:
                 replace_child(child)
 
     replace_child(module)
-    logger.success(f"Model after replacements:\n{module}")
+    logger.info(f"Model after replacements:\n{module}")
     return module
