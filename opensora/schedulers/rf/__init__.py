@@ -2,7 +2,7 @@ import time
 from functools import partial
 
 import torch
-from torch.profiler import ProfilerActivity, profile, record_function
+from torch.profiler import ProfilerActivity, profile
 from tqdm import tqdm
 
 from opensora.registry import SCHEDULERS
