@@ -1,16 +1,13 @@
-import time
-
 import torch
 import torch.nn as nn
 from loguru import logger
-from torch.profiler import ProfilerActivity, profile, schedule
 from tqdm import tqdm
 
 from opensora.utils.custom.layers.linear import CustomedCKLinear
-from opensora.utils.custom.profile import get_profiling_status, trace_handler_wrapper
+from opensora.utils.custom.profile import get_profiling_status
 
 torch.manual_seed(2024)
-_, _ = get_profiling_status()
+_, profile_outdir = get_profiling_status()
 
 n_runs = 10000
 warm_ups = 1000
@@ -36,43 +33,55 @@ for in_channels, out_channels in [
     # Speed
     logger.info("Benchmarking original linear...")
     dur1 = []
-    with profile(
-        activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA],
-        schedule=schedule(
-            wait=warm_ups,  # Number of steps to skip
-            warmup=0,  # Number of steps to include in the warm-up phase
-            active=5,  # Number of steps to include in the active phase (profiling)
-            repeat=1,  # Number of times to repeat the above schedule
-        ),
-        record_shapes=True,
-        with_stack=True,
-        on_trace_ready=trace_handler_wrapper(f"in{in_channels}.out{out_channels}.pt-rocm"),
-    ) as prof:
-        for i in tqdm(range(n_runs)):
-            start = time.perf_counter()
-            out1 = linear(input)
-            dur1.append(time.perf_counter() - start)
-            prof.step()
+    # with profile(
+    #     activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA],
+    #     schedule=schedule(
+    #         wait=warm_ups,  # Number of steps to skip
+    #         warmup=0,  # Number of steps to include in the warm-up phase
+    #         active=5,  # Number of steps to include in the active phase (profiling)
+    #         repeat=1,  # Number of times to repeat the above schedule
+    #     ),
+    #     record_shapes=True,
+    #     with_stack=True,
+    #     on_trace_ready=trace_handler_wrapper(f"in{in_channels}.out{out_channels}.pt-rocm"),
+    # ) as prof:
+    for i in tqdm(range(n_runs)):
+        start_event = torch.cuda.Event(enable_timing=True)
+        end_event = torch.cuda.Event(enable_timing=True)
+
+        start_event.record()
+        out1 = linear(input)
+        end_event.record()
+        torch.cuda.synchronize()
+
+        dur1.append(start_event.elapsed_time(end_event))  # ms
+        # prof.step()
 
     logger.info("Benchmarking CK linear...")
     dur2 = []
-    with profile(
-        activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA],
-        schedule=schedule(
-            wait=warm_ups,  # Number of steps to skip
-            warmup=0,  # Number of steps to include in the warm-up phase
-            active=5,  # Number of steps to include in the active phase (profiling)
-            repeat=1,  # Number of times to repeat the above schedule
-        ),
-        record_shapes=True,
-        with_stack=True,
-        on_trace_ready=trace_handler_wrapper(f"in{in_channels}.out{out_channels}.tunned-ck"),
-    ) as prof:
-        for i in tqdm(range(n_runs)):
-            start = time.perf_counter()
-            out2 = ck_linear(input)
-            dur2.append(time.perf_counter() - start)
-            prof.step()
+    # with profile(
+    #     activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA],
+    #     schedule=schedule(
+    #         wait=warm_ups,  # Number of steps to skip
+    #         warmup=0,  # Number of steps to include in the warm-up phase
+    #         active=n_runs - warm_ups,  # Number of steps to include in the active phase (profiling)
+    #         repeat=1,  # Number of times to repeat the above schedule
+    #     ),
+    #     record_shapes=True,
+    #     with_stack=True,
+    #     on_trace_ready=trace_handler_wrapper(f"in{in_channels}.out{out_channels}.tunned-ck"),
+    # ) as prof:
+    for i in tqdm(range(n_runs)):
+        start_event = torch.cuda.Event(enable_timing=True)
+        end_event = torch.cuda.Event(enable_timing=True)
+
+        start_event.record()
+        out2 = ck_linear(input)
+        end_event.record()
+        torch.cuda.synchronize()
+
+        dur2.append(start_event.elapsed_time(end_event))  # ms
+        # prof.step()
 
     all_durs[f"in{in_channels}.out{out_channels}"] = {
         "pt-rocm": dur1,
@@ -81,7 +90,7 @@ for in_channels, out_channels in [
 
     avg_dur1 = sum(dur1[warm_ups:]) / (n_runs - warm_ups)
     avg_dur2 = sum(dur2[warm_ups:]) / (n_runs - warm_ups)
-    logger.info("Baseline: {:.10f}s".format(avg_dur1))
-    logger.info("CK Linear: {:.10f}s ~ {:.2f}%\n".format(avg_dur2, avg_dur2 / avg_dur1 * 100))
+    logger.info("Baseline: {:.10f}ms".format(avg_dur1))
+    logger.info("CK Linear: {:.10f}ms ~ {:.2f}%\n".format(avg_dur2, avg_dur2 / avg_dur1 * 100))
 
-torch.save(all_durs, "save/all_durations.pth")
+torch.save(all_durs, profile_outdir / "all_durations.pth")
