@@ -16,6 +16,7 @@ from opensora.models.text_encoder.t5 import text_preprocessing
 from opensora.registry import MODELS, SCHEDULERS, build_module
 from opensora.utils.config_utils import parse_configs
 from opensora.utils.custom.layers import replace_with_custom_layers
+from opensora.utils.custom.profile import is_profiling_sample
 from opensora.utils.inference_utils import (
     add_watermark,
     append_generated,
@@ -276,6 +277,7 @@ def main():
                     additional_args=model_args,
                     progress=verbose >= 2,
                     mask=masks,
+                    is_profiling=is_profiling_sample(k),
                 )
                 samples = vae.decode(samples.to(dtype), num_frames=num_frames)
                 video_clips.append(samples)

@@ -99,7 +99,7 @@ def collect_references_batch(
 ):
     refs_x = []  # refs_x: [batch, ref_num, C, T, H, W]
     latencies = []
-    is_profiling, _ = get_profiling_status()
+    is_profiling, _, _ = get_profiling_status()
 
     for reference_path in reference_paths:
         if reference_path == "":

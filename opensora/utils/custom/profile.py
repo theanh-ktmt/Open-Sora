@@ -1,38 +1,39 @@
 import os
 from pathlib import Path
-from typing import Optional, Tuple
+from typing import Tuple
 
 from loguru import logger
 
-IS_PROFILING: Optional[bool] = None
-PROFILE_OUTDIR: Optional[str] = None
+IS_PROFILING: bool = os.environ.get("IS_PROFILING", "0") == "1"
+TARGET_SAMPLE: int = int(os.environ.get("TARGET_SAMPLE", "1"))
+PROFILE_OUTDIR: Path = Path(os.environ.get("PROFILE_OUTDIR", "save/profile"))
+PROFILE_OUTDIR.mkdir(parents=True, exist_ok=True)
+logger.info(
+    """Profiling status:
+- IS_PROFILING: {}
+- TARGET_SAMPLE: {}
+- PROFILE_OUTDIR: {}""".format(
+        IS_PROFILING, TARGET_SAMPLE, PROFILE_OUTDIR
+    )
+)
 
 
-def get_profiling_status() -> Tuple[bool, Path]:
+def get_profiling_status() -> Tuple[bool, int, Path]:
     """Get information about current profiling status.
-
     Returns:
         bool: If profiling is turned on or off.
-        int: Number samples to be ignored when warming up.
+        int: Target sample to be profile.
         Path: Path to output directory.
     """
-    global IS_PROFILING
-    global PROFILE_OUTDIR
+    return IS_PROFILING, TARGET_SAMPLE, PROFILE_OUTDIR
 
-    if IS_PROFILING is None or PROFILE_OUTDIR is None:
-        IS_PROFILING = os.environ.get("IS_PROFILING", "0") == "1"
-        PROFILE_OUTDIR = Path(os.environ.get("PROFILE_OUTDIR", "save/profile"))
-        PROFILE_OUTDIR.mkdir(parents=True, exist_ok=True)
 
-        logger.info(
-            """Profiling status:
-        - IS_PROFILING: {}
-        - PROFILE_OUTDIR: {}""".format(
-                IS_PROFILING, PROFILE_OUTDIR
-            )
-        )
-
-    return IS_PROFILING, PROFILE_OUTDIR
+def is_profiling_sample(sample_index: int) -> bool:
+    """Return if current sample is profiling or not."""
+    if not IS_PROFILING:
+        return False
+    else:
+        return sample_index == TARGET_SAMPLE
 
 
 def trace_handler_wrapper(target, row_limit=10000):
