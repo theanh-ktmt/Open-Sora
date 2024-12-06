@@ -9,7 +9,7 @@ from opensora.registry import SCHEDULERS
 from opensora.schedulers.rf.rectified_flow import RFlowScheduler, timestep_transform
 from opensora.utils.custom.mha import prepare_mha_bias, prepare_mha_kv
 from opensora.utils.custom.pos_emb import prepare_pos_emb
-from opensora.utils.custom.profile import get_profiling_status, trace_handler_wrapper
+from opensora.utils.custom.profile import trace_handler_wrapper
 from opensora.utils.custom.y_embedder import get_y_embedder
 from opensora.utils.misc import create_logger
 
@@ -69,10 +69,10 @@ class RFLOW:
         guidance_scale=None,
         progress=True,
         return_latencies=False,
+        is_profiling=False,
     ):
+        logger.info("Profiling this sample...")
         latencies = {}
-        is_profiling, _ = get_profiling_status()
-
         z = z.to(self.dtype)
 
         # TensorRT: Hard-coded config
@@ -158,17 +158,11 @@ class RFLOW:
             # wrap diffusion path with profiler
             with profile(
                 activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA],
-                schedule=torch.profiler.schedule(
-                    wait=1,  # Number of steps to skip
-                    warmup=0,  # Number of steps to include in the warm-up phase
-                    active=3,  # Number of steps to include in the active phase (profiling)
-                    repeat=1,  # Number of times to repeat the above schedule
-                ),
                 record_shapes=True,
                 with_stack=True,
                 on_trace_ready=trace_handler_wrapper("backbone"),
-            ) as prof:
-                z, latencies["backbone"] = diffuse_process(profiler=prof)
+            ):
+                z, latencies["backbone"] = diffuse_process()
         else:
             z, latencies["backbone"] = diffuse_process()
 
@@ -187,7 +181,6 @@ class RFLOW:
         mha_bias,
         guidance_scale,
         progress=True,
-        profiler=None,
     ):
         if mask is not None:
             noise_added = torch.zeros_like(mask, dtype=torch.bool)
@@ -232,10 +225,6 @@ class RFLOW:
 
             if mask is not None:
                 z = torch.where(mask_t_upper[:, None, :, None, None], z, x0)
-
-            # update profiler at the end of each step
-            if profiler is not None:
-                profiler.step()
 
         return z, latency
 

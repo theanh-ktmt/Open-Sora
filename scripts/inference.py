@@ -17,6 +17,7 @@ from opensora.models.text_encoder.t5 import text_preprocessing
 from opensora.registry import MODELS, SCHEDULERS, build_module
 from opensora.utils.config_utils import parse_configs
 from opensora.utils.custom.compile import compile_module, is_torch_compile_enabled
+from opensora.utils.custom.profile import is_profiling_sample
 from opensora.utils.custom.tensorrt import is_tensorrt_enabled
 from opensora.utils.custom.y_embedder import get_y_embedder, load_y_embedder
 from opensora.utils.inference_utils import (
@@ -299,6 +300,7 @@ def main():
                     additional_args=model_args,
                     progress=verbose >= 2,
                     mask=masks,
+                    is_profiling=is_profiling_sample(k),
                 )
                 samples = vae.decode(samples.to(dtype), num_frames=num_frames)
                 video_clips.append(samples)
