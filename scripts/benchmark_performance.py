@@ -372,6 +372,10 @@ def main():
             start_idx += len(batch_prompts)
 
         # Done a combination (Remove first sample for warmup)
+        logger.info("End2End Latencies: {}".format(end2end_latencies))
+        logger.info("Backbone Latencies: {}".format(end2end_latencies))
+        logger.info("Text Encoder Latencies: {}".format(end2end_latencies))
+        logger.info("Image Encoder Latencies: {}".format(end2end_latencies))
         results[video_resolution][video_length]["end2end"] = sum(end2end_latencies[1:]) / len(end2end_latencies[1:])
         results[video_resolution][video_length]["backbone"] = sum(backbone_latencies[1:]) / len(backbone_latencies[1:])
         results[video_resolution][video_length]["text_encoder"] = sum(text_encoder_latencies[1:]) / len(
