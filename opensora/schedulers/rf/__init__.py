@@ -71,7 +71,8 @@ class RFLOW:
         return_latencies=False,
         is_profiling=False,
     ):
-        logger.info("Profiling this sample...")
+        if is_profiling:
+            logger.info("Profiling this sample...")
         latencies = {}
         z = z.to(self.dtype)
 
