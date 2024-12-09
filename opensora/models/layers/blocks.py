@@ -485,6 +485,7 @@ class MultiHeadCrossAttention(nn.Module):
 
         # Calculate cross attn
         if enable_xformers:
+            attn_bias = attn_bias.unsqueeze(0).unsqueeze(1).expand(1, 16, 216000, 600)
             x = xformers.ops.memory_efficient_attention(q, k, v, p=self.attn_drop.p, attn_bias=attn_bias)
         else:
             x = memory_efficient_attention(q, k, v, p=self.attn_drop.p, attn_bias=attn_bias)
