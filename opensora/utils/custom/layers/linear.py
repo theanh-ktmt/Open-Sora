@@ -49,7 +49,7 @@ class CustomHipblasltLinear(nn.Module):
 
     def __init__(self, linear: nn.Linear):
         super().__init__()
-        self.weight_T = linear.weight.transpose(0, 1)  # Transpose, not require contiguous
+        self.weight_T = linear.weight.transpose(0, 1).contiguous()  # Transpose and make contiguous
         self.in_channels, self.out_channels = self.weight_T.shape
         self.bias = linear.bias
 

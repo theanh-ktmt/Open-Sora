@@ -12,7 +12,7 @@ export HIP_VISIBLE_DEVICES=0
 # modules
 export ENABLE_XFORMERS=0
 export ENABLE_TORCHCOMPILE=1
-export ENABLE_CK=0
+export CUSTOM_BACKEND="ck" # or "hipblaslt"
 
 python3 scripts/inference.py configs/anhtt/inference.py \
     --num-frames 4s --resolution 720p --num-sampling-steps 30 \
