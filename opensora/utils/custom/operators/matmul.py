@@ -5,7 +5,7 @@ import torch.nn.functional as F
 from modiffusion.ops.ck_mm import SUPPORTED_SHAPES, ck_fp16_mm_op
 
 
-def get_available_shapes(in_channels: int, out_channels: int):
+def get_available_shapes(in_channels: int, out_channels: int) -> List[Tuple[int, int, int]]:
     """
     Get available shapes specific for Linear(in_channels, out_channels, dtype).
 
@@ -30,7 +30,7 @@ def get_available_shapes(in_channels: int, out_channels: int):
     return matched_shapes
 
 
-def get_shape(available_shapes, M: int):
+def get_shape(available_shapes, M: int) -> Tuple[int, int]:
     """Get suitable shape with padding for M."""
     for shape in available_shapes:
         if shape[0] >= M:
@@ -42,7 +42,7 @@ def ck_matmul_linear(
     input: torch.Tensor,
     weight_T: torch.Tensor,
     available_shapes: List[Tuple[int]] = [],
-):
+) -> torch.Tensor:
     """CK Matrix Multiplication for Linear layer."""
     assert input.is_contiguous() and weight_T.is_contiguous(), "Both tensors used for CK matmul must be contiguous."
     assert input.shape[-1] == weight_T.shape[0], f"Invalid shape {input.shape[-1]} != {weight_T.shape[0]}."

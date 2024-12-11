@@ -61,17 +61,17 @@ VIDEO_GENERATION_PROMPTS = VIDEO_GENERATION_PROMPTS[:N_PROMPTS]
 
 VIDEO_REFERENCES = ["save/references/sample.jpg"] * len(VIDEO_GENERATION_PROMPTS)
 VIDEO_RESOLUTIONS = [
-    "144p",
-    "240p",
-    "360p",
-    "480p",
+    # "144p",
+    # "240p",
+    # "360p",
+    # "480p",
     "720p",
 ]
 VIDEO_LENGTHS = [
-    "2s",
+    # "2s",
     "4s",
-    "8s",
-    "16s",
+    # "8s",
+    # "16s",
 ]
 ASPECT_RATIO = "9:16"
 BATCH_SIZE = 1
@@ -371,9 +371,12 @@ def main():
                 video_clips.append(samples)
 
             # Done a prompt
-            end2end_latencies.append(time.time() - begin)
+            end2end_latency = time.time() - begin
+            end2end_latencies.append(end2end_latency)
             backbone_latencies.append(backbone_latency["backbone"])
             text_encoder_latencies.append(backbone_latency["text_encoder"])
+
+            logger.info("End-to-end latency: {:.2f}s".format(end2end_latency))
 
             # == save samples ==
             if is_main_process():
@@ -397,6 +400,10 @@ def main():
             start_idx += len(batch_prompts)
 
         # Done a combination (Remove first sample for warmup)
+        logger.info("End-to-End latencies: {}".format(end2end_latency))
+        logger.info("Backbone latency: {}".format(backbone_latencies))
+        logger.info("Text Encoder latency: {}".format(text_encoder_latencies))
+        logger.info("Image Encoder latency: {}".format(image_encoder_latencies))
         results[video_resolution][video_length]["end2end"] = sum(end2end_latencies[1:]) / len(end2end_latencies[1:])
         results[video_resolution][video_length]["backbone"] = sum(backbone_latencies[1:]) / len(backbone_latencies[1:])
         results[video_resolution][video_length]["text_encoder"] = sum(text_encoder_latencies[1:]) / len(

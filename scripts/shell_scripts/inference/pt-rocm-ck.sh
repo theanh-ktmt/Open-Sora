@@ -1,5 +1,5 @@
 #!/bin/bash
-MIOPEN_DISABLE_CACHE=1 HIP_VISIBLE_DEVICES=7 \
+MIOPEN_DISABLE_CACHE=1 HIP_VISIBLE_DEVICES=0 \
 ENABLE_XFORMERS=0 ENABLE_CK=1 ENABLE_TORCHCOMPILE=0 \
 python3 scripts/inference.py configs/anhtt/inference.py \
   --num-frames 4s --resolution 720p --num-sampling-steps 30 \
