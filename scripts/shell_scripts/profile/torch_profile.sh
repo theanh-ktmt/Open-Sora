@@ -1,10 +1,15 @@
 #!/bin/bash
+# profile args
 export IS_PROFILING=1
 export TARGET_SAMPLE=2
-export PROFILE_OUTDIR=save/profile/pt-rocm-tc/mi300-fp16/720p-4s/torch_profile
-export TORCH_TRACE=$PROFILE_OUTDIR
+export PROFILE_OUTDIR="save/profile/pt-rocm-tc/mi300-fp16/720p-4s/torch_profile"
+export TORCH_TRACE="./"
+
+# gpus
 export MIOPEN_DISABLE_CACHE=1
 export HIP_VISIBLE_DEVICES=1
+
+# modules
 export ENABLE_XFORMERS=0
 export ENABLE_TORCHCOMPILE=1
 

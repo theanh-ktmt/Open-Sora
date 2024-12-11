@@ -17,6 +17,7 @@ from opensora.models.text_encoder.t5 import text_preprocessing
 from opensora.registry import MODELS, SCHEDULERS, build_module
 from opensora.utils.config_utils import parse_configs
 from opensora.utils.custom.compile import compile_module, is_torch_compile_enabled
+from opensora.utils.custom.layers import replace_with_custom_layers
 from opensora.utils.custom.profile import is_profiling_sample
 from opensora.utils.custom.tensorrt import is_tensorrt_enabled
 from opensora.utils.custom.y_embedder import get_y_embedder, load_y_embedder
@@ -124,6 +125,9 @@ def main():
     load_y_embedder("save/weights/y_embedder.pth", device, dtype)
     text_encoder.y_embedder = get_y_embedder()
     # torch.save(text_encoder.y_embedder, "y_embedder.pth")
+
+    # replace module layers with customed layers
+    model = replace_with_custom_layers(model)
 
     if is_torch_compile_enabled():
         if is_tensorrt_enabled():
