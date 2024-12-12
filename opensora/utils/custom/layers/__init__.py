@@ -40,6 +40,15 @@ def replace_with_hipblaslt_layers(module: nn.Module) -> nn.Module:
 
 def replace_all_linears(child_module: nn.Module, customed_linear: nn.Module) -> nn.Module:
     """Recursively replace all linear layers in the given module."""
+    SKIPPED_MODULES = [
+        "pos_embed",
+        "rope",
+        "x_embedder",
+        "t_embedder",
+        "t_block",
+        "fps_embedder",
+    ]
+
     for name, child in child_module.named_children():
         if isinstance(child, nn.Linear):
             try:
@@ -49,4 +58,5 @@ def replace_all_linears(child_module: nn.Module, customed_linear: nn.Module) -> 
             except Exception as e:
                 logger.warning(f"Could not replace layer '{name}': {e}")
         else:
-            replace_all_linears(child, customed_linear)
+            if all(x not in name for x in SKIPPED_MODULES):
+                replace_all_linears(child, customed_linear)

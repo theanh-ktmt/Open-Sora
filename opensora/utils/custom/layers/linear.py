@@ -62,6 +62,8 @@ class CustomHipblasltLinear(nn.Module):
             self.device.type in self.SUPPORTED_DEVICES
         ), f"Device '{self.device}' is not supported. Supported devices: {self.SUPPORTED_DEVICES}"
 
+        self.available_shapes = sorted(get_available_shapes(self.in_channels, self.out_channels))
+
     def __repr__(self):
         return f"HipblasltLinear(in_features={self.in_channels}, out_features={self.out_channels}, bias={self.bias is not None})"
 

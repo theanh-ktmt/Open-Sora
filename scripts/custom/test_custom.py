@@ -9,8 +9,8 @@ from opensora.utils.custom.profile import get_profiling_status
 torch.manual_seed(2024)
 _, _, profile_outdir = get_profiling_status()
 
-n_runs = 10000
-warm_ups = 1000
+n_runs = 1000
+warm_ups = 100
 all_durs = {}
 
 for in_channels, out_channels in [
@@ -20,9 +20,9 @@ for in_channels, out_channels in [
     (1152, 3456),
 ]:
     logger.info("In: {} - Out: {}".format(in_channels, out_channels))
-    linear = nn.Linear(in_channels, out_channels, dtype=torch.float16, device="cuda")
+    linear = torch.compile(nn.Linear(in_channels, out_channels, dtype=torch.float16, device="cuda"))
     # ck_linear = CustomedCKLinear(linear)
-    hipblaslt_linear = CustomHipblasltLinear(linear)
+    hipblaslt_linear = torch.compile(CustomHipblasltLinear(linear))
 
     # Correctness
     input = torch.rand(2, 108000, in_channels, dtype=torch.float16, device="cuda")
@@ -49,6 +49,7 @@ for in_channels, out_channels in [
     #     on_trace_ready=trace_handler_wrapper(f"in{in_channels}.out{out_channels}.origin"),
     # ) as prof:
     for i in tqdm(range(n_runs)):
+        input = torch.rand(2, 108000, in_channels, dtype=torch.float16, device="cuda")
         start_event = torch.cuda.Event(enable_timing=True)
         end_event = torch.cuda.Event(enable_timing=True)
 
@@ -75,6 +76,7 @@ for in_channels, out_channels in [
     #     on_trace_ready=trace_handler_wrapper(f"in{in_channels}.out{out_channels}.customed"),
     # ) as prof:
     for i in tqdm(range(n_runs)):
+        input = torch.rand(2, 108000, in_channels, dtype=torch.float16, device="cuda")
         start_event = torch.cuda.Event(enable_timing=True)
         end_event = torch.cuda.Event(enable_timing=True)
 
