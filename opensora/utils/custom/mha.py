@@ -7,7 +7,7 @@ import torch.nn.functional as F
 from loguru import logger
 
 from opensora.utils.custom.common import add_padding, get_dynamic_size
-from opensora.utils.custom.xformers import block_diagonal_mask
+from opensora.utils.custom.operators.xformers import block_diagonal_mask
 
 
 # For KV

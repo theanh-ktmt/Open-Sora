@@ -1,3 +1,4 @@
+import math
 import os
 from typing import List, Optional
 
@@ -116,3 +117,33 @@ def block_diagonal_mask(
         kv_offset += kv_len
 
     return mask
+
+
+def apply_padded_xformers_attn(q, k, v, attn_func, attn_bias=None):
+    target_head_dim = 128
+    origin_head_dim = q.shape[-1]
+    origin_scale = 1 / math.sqrt(origin_head_dim)
+
+    padding_amount = target_head_dim - origin_head_dim
+    padding_value = 0
+
+    q = F.pad(q, (0, padding_amount), "constant", padding_value)
+    k = F.pad(k, (0, padding_amount), "constant", padding_value)
+    v = F.pad(v, (0, padding_amount), "constant", padding_value)
+
+    attn_output = attn_func(q, k, v, scale=origin_scale, attn_bias=attn_bias)
+    return attn_output[..., :origin_head_dim]
+
+
+@torch.library.custom_op("custom_attn::padded_xformers_attn", mutates_args=(), device_types="cuda")
+def padded_xformers_attn(
+    q: torch.Tensor, k: torch.Tensor, v: torch.Tensor, attn_bias: Optional[torch.Tensor] = None
+) -> torch.Tensor:
+    import xformers.ops as xops
+
+    return apply_padded_xformers_attn(q, k, v, xops.memory_efficient_attention, attn_bias)
+
+
+@padded_xformers_attn.register_fake
+def _(q: torch.Tensor, k: torch.Tensor, v: torch.Tensor, attn_bias: Optional[torch.Tensor] = None) -> torch.Tensor:
+    return torch.empty_like(q)
