@@ -4,8 +4,18 @@ from typing import Any, Dict, Optional
 import torch
 import torch.nn as nn
 from loguru import logger
+from torch._inductor.select_algorithm import extern_kernels
 
 ENABLE_TORCHCOMPILE: Optional[bool] = None
+
+
+def trace_fn_name(fn):
+    def wrapper(*args, **kwargs):
+        # do some side effect to see that the hook is working
+        print(f"Patched: {fn.__name__=}")
+        return fn(*args, **kwargs)
+
+    return wrapper
 
 
 def is_torch_compile_enabled() -> bool:
@@ -24,6 +34,13 @@ def compile_module(
     module: nn.Module, configs: Optional[Dict[str, Any]] = None, cache_path: str = "save/cache/model.compiled.pth"
 ):
     """Implement torch.compile for an nn.Module."""
+    # Hook custom kernels to after 'torch.compile'
+    assert extern_kernels.mm is torch.mm
+    assert extern_kernels.addmm is torch.addmm
+
+    extern_kernels.addmm = trace_fn_name(extern_kernels.addmm)
+    extern_kernels.mm = trace_fn_name(extern_kernels.mm)
+
     # prepare configs
     DEFAULT_CONFIGS = {
         "mode": "default",

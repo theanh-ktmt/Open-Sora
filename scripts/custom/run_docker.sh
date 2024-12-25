@@ -11,5 +11,5 @@ docker run -it \
     -v $MODIFUSSION_DIR:/workspace/modiffusion \
     -v $OPENSORA_DIR:/workspace/Open-Sora \
     -w /workspace/Open-Sora \
-    --name opensora-anhtt \
-    modiffusion:mv1318
+    --name anhtt-opensora \
+    modiffusion:latest

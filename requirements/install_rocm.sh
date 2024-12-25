@@ -10,10 +10,13 @@ cd OpenSora
 pip install -v -e .
 
 # Install torch-rocm
-pip install --force-reinstall torch==2.4.1 torchvision==0.19.1 --index-url https://download.pytorch.org/whl/rocm6.1
+pip install --force-reinstall torch==2.5.1 torchvision==0.20.1 --index-url https://download.pytorch.org/whl/rocm6.2
 
 # Install bits and bytes
 pip install --force-reinstall --no-deps https://github.com/bitsandbytes-foundation/bitsandbytes/releases/download/continuous-release_multi-backend-refactor/bitsandbytes-0.44.1.dev0-py3-none-manylinux_2_24_x86_64.whl
+
+# Install others
+pip install transformers==4.46.3 diffusers==0.31.0 tokenizers==0.20.3 numpy==2.2.0
 
 # Edit diffusers utils to remove cached_download
 # (Example file path: /home/username/miniconda3/envs/opensora/lib/python3.10/site-packages/diffusers/utils/dynamic_modules_utils.py)
