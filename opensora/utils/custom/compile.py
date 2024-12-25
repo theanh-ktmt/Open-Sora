@@ -12,7 +12,7 @@ ENABLE_TORCHCOMPILE: Optional[bool] = None
 def trace_fn_name(fn):
     def wrapper(*args, **kwargs):
         # do some side effect to see that the hook is working
-        print(f"Patched: {fn.__name__=}")
+        # print(f"Patched: {fn.__name__=}")
         return fn(*args, **kwargs)
 
     return wrapper

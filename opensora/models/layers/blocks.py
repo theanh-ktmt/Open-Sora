@@ -26,6 +26,8 @@ from opensora.acceleration.communications import all_to_all, split_forward_gathe
 from opensora.acceleration.parallel_states import get_sequence_parallel_group
 from opensora.utils.custom.xformers import block_diagonal_mask, is_xformers_enabled, memory_efficient_attention
 
+# from opensora.utils.custom.operators import triton_flash_attn_bhsd
+
 # Import xformers optional
 enable_xformers = is_xformers_enabled()
 if enable_xformers:
@@ -209,6 +211,7 @@ class Attention(nn.Module):
                 causal=self.is_causal,
             )
         else:
+            # old torch-impl attn
             dtype = q.dtype
             q = q * self.scale
             attn = q @ k.transpose(-2, -1)  # translate attn to float32
@@ -222,9 +225,13 @@ class Attention(nn.Module):
             attn = self.attn_drop(attn)
             x = attn @ v
 
-        x_output_shape = (B, N, C)
-        if not enable_flash_attn:
+            # triton-bhsd
+            # x = triton_flash_attn_bhsd(q, k, v)
+
+            # transpose to layout 'bshd'
             x = x.transpose(1, 2)
+
+        x_output_shape = (B, N, C)
         x = x.reshape(x_output_shape)
         x = self.proj(x)
         x = self.proj_drop(x)
@@ -484,11 +491,19 @@ class MultiHeadCrossAttention(nn.Module):
         # k, v = kv.unbind(2)
 
         # Calculate cross attn
+        # xformers default impls
         if enable_xformers:
             attn_bias = attn_bias.unsqueeze(0).unsqueeze(1).expand(1, 16, 216000, 600)
             x = xformers.ops.memory_efficient_attention(q, k, v, p=self.attn_drop.p, attn_bias=attn_bias)
         else:
             x = memory_efficient_attention(q, k, v, p=self.attn_drop.p, attn_bias=attn_bias)
+        # pytorch default impls
+        # attn_bias = attn_bias.unsqueeze(0).unsqueeze(1).expand(1, 16, 216000, 600)
+        # q = q.transpose(1, 2) # transpose to 'bhsd' layout
+        # k = k.transpose(1, 2) # transpose to 'bhsd' layout
+        # v = v.transpose(1, 2) # transpose to 'bhsd' layout
+        # x = F.scaled_dot_product_attention(q, k, v, attn_mask=attn_bias)
+        # x = x.transpose(1, 2) # transpose to 'bshd' layout
 
         # normal tensor is not contiguous for view function
         x = x.view(B, -1, C) if enable_xformers else x.reshape(B, -1, C)

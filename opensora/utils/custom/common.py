@@ -38,3 +38,15 @@ def to_numpy(tensor: torch.Tensor) -> np.ndarray:
 def to_tensor(array: np.ndarray, device: torch.device = torch.device("cpu")):
     """Convert numpy array to torch.Tensor."""
     return torch.from_numpy(array).to(device)
+
+
+def is_cuda():
+    return torch.cuda.is_available() and torch.version.cuda
+
+
+def is_rocm():
+    return torch.cuda.is_available() and torch.version.hip
+
+
+def is_hopper():
+    return is_cuda() and torch.cuda.get_device_capability() == (9, 0)
