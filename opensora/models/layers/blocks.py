@@ -504,8 +504,10 @@ class MultiHeadCrossAttention(nn.Module):
         # if enable_xformers:
         #     attn_bias = attn_bias.unsqueeze(0).unsqueeze(1).expand(1, 16, 216000, 600)
         #     x = xformers.ops.memory_efficient_attention(q, k, v, p=self.attn_drop.p, attn_bias=attn_bias)
+        #     x = x.view(B, -1, C)
         # else:
         #     x = memory_efficient_attention(q, k, v, p=self.attn_drop.p, attn_bias=attn_bias)
+        #     x = x.reshape(B, -1, C)
 
         # pytorch default impls
         # attn_bias = attn_bias.unsqueeze(0).unsqueeze(1).expand(1, 16, 216000, 600)
@@ -514,13 +516,14 @@ class MultiHeadCrossAttention(nn.Module):
         # v = v.transpose(1, 2) # transpose to 'bhsd' layout
         # x = F.scaled_dot_product_attention(q, k, v, attn_mask=attn_bias)
         # x = x.transpose(1, 2) # transpose to 'bshd' layout
+        # x = x.reshape(B, -1, C)
 
         # padded xformers default
         attn_bias = attn_bias.unsqueeze(0).unsqueeze(1).expand(1, 16, 216000, 600)
         x = padded_xformers_attn(q, k, v, attn_bias=attn_bias)
+        x = x.reshape(B, -1, C)
 
         # normal tensor is not contiguous for view function
-        x = x.view(B, -1, C) if enable_xformers else x.reshape(B, -1, C)
         x = self.proj(x)
         x = self.proj_drop(x)
         return x
