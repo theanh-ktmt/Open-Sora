@@ -25,20 +25,22 @@ def compile_module(
 ):
     """Implement torch.compile for an nn.Module."""
     # Hook custom kernels to after 'torch.compile'
-    # from torch._inductor.select_algorithm import extern_kernels
+    from torch._inductor.select_algorithm import extern_kernels
 
-    # def trace_fn_name(fn):
-    #     def wrapper(*args, **kwargs):
-    #         # do some side effect to see that the hook is working
-    #         print(f"Patched: {fn.__name__=}")
-    #         return fn(*args, **kwargs)
+    def trace_input_shape(fn):
+        def wrapper(*args, **kwargs):
+            # intercept args & kwargs to see its shape
+            print(f"{fn.__name__=}")
+            for tensor in filter(lambda x: isinstance(x, torch.Tensor), args):
+                print(f"{tensor.shape=}, {tensor.stride()=} {tensor.dtype=}")
+            return fn(*args, **kwargs)
 
-    #     return wrapper
+        return wrapper
 
-    # assert extern_kernels.mm is torch.mm
-    # assert extern_kernels.addmm is torch.addmm
-    # extern_kernels.addmm = trace_fn_name(extern_kernels.addmm)
-    # extern_kernels.mm = trace_fn_name(extern_kernels.mm)
+    assert extern_kernels.mm is torch.mm
+    assert extern_kernels.addmm is torch.addmm
+    extern_kernels.addmm = trace_input_shape(extern_kernels.addmm)
+    extern_kernels.mm = trace_input_shape(extern_kernels.mm)
 
     # prepare configs
     DEFAULT_CONFIGS = {
