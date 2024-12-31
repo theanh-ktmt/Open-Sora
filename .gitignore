@@ -210,3 +210,4 @@ scripts/play
 data-gym-cache/
 *.onnx*
 *.engine*
+tmp

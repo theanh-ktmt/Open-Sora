@@ -26,15 +26,16 @@ pip install loguru onnxruntime
 # Install Flash Attention
 git clone https://github.com/ROCm/flash-attention.git
 cd flash-attention/
-GPU_ARCHS=gfx90a python setup.py install # For MI250 series GPUs
-# GPU_ARCHS=gfx942 python setup.py install # For MI300 series GPUs
+git checkout c1d146cbd5becd9e33634b1310c2d27a49c7e862
+GPU_ARCHS=gfx942 python setup.py install # For MI300 series GPUs
+# GPU_ARCHS=gfx90a python setup.py install # For MI250 series GPUs
 
-# Install Xformers
+# Install Xformers using pip
+pip install xformers==0.0.28 --index-url https://download.pytorch.org/whl/rocm6.1
+
+# Alternatively, install Xformers (currently failed)
 git clone https://github.com/ROCm/xformers.git
 cd xformers/
 git submodule update --init --recursive
-PYTORCH_ROCM_ARCH=gfx90a python setup.py install # For Instinct MI250 series GPUs
-# PYTORCH_ROCM_ARCH=gfx942 python setup.py install # For Instinct MI300 series GPUs
-
-# Alternatively, install Xformers using pip
-pip install xformers==0.0.28 --index-url https://download.pytorch.org/whl/rocm6.1
+# PYTORCH_ROCM_ARCH=gfx90a python setup.py install # For Instinct MI250 series GPUs
+PYTORCH_ROCM_ARCH=gfx942 python setup.py install # For Instinct MI300 series GPUs
