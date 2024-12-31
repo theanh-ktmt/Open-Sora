@@ -21,7 +21,7 @@ pip install --force-reinstall --no-deps https://github.com/bitsandbytes-foundati
 # -> Remove the cached_download import
 
 # Install additional dependencies
-pip install loguru onnxruntime
+pip install loguru onnxruntime av==13.1.0
 
 # Install Flash Attention
 git clone https://github.com/ROCm/flash-attention.git
@@ -37,5 +37,5 @@ pip install xformers==0.0.28 --index-url https://download.pytorch.org/whl/rocm6.
 git clone https://github.com/ROCm/xformers.git
 cd xformers/
 git submodule update --init --recursive
-# PYTORCH_ROCM_ARCH=gfx90a python setup.py install # For Instinct MI250 series GPUs
 PYTORCH_ROCM_ARCH=gfx942 python setup.py install # For Instinct MI300 series GPUs
+# PYTORCH_ROCM_ARCH=gfx90a python setup.py install # For Instinct MI250 series GPUs
