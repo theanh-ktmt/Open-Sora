@@ -1,22 +1,28 @@
-import os
+"""Replace Open-Sora layers with our customed layers.
+This equals to hook before compiled."""
 
 import torch.nn as nn
 from loguru import logger
 
-CUSTOM_BACKEND = os.environ.get("CUSTOM_BACKEND", None)
+from opensora.utils.custom.compile import get_custom_backend
 
 
 def replace_with_custom_layers(module: nn.Module) -> nn.Module:
-    """Replace all module layers with custom layers if CUSTOM_BACKEND is set."""
-    if CUSTOM_BACKEND is None or not isinstance(module, nn.Module):
+    """Replace all module layers with custom layers if custom_backend is not None."""
+    custom_backend = get_custom_backend()
+
+    if custom_backend is None or not isinstance(module, nn.Module):
+        logger.info("Customed backend is None or module is not nn.Module. Keep the origin module.")
         return module
 
-    if CUSTOM_BACKEND == "ck":
+    if custom_backend == "ck":
         module = replace_with_ck_layers(module)
-    elif CUSTOM_BACKEND == "hipblaslt":
+    elif custom_backend == "hipblaslt":
         module = replace_with_hipblaslt_layers(module)
     else:
-        raise NotImplementedError("Backend '{}' is currently not supported!".format(CUSTOM_BACKEND))
+        raise NotImplementedError(
+            "Backend '{}' is currently not supported for hooking before 'torch.compile'!".format(custom_backend)
+        )
 
     logger.info(f"Model after replacements:\n{module}")
     return module

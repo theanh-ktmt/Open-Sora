@@ -1,7 +1,7 @@
 from typing import Optional
 
 import torch
-from modiffusion.ops.hipblaslt_addmm import hipblaslt_fp16_addmm_op
+from modiffusion.ops.hipblaslt_gemm import hipblaslt_addmm
 
 
 def hipblaslt_addmm_linear(
@@ -22,7 +22,7 @@ def hipblaslt_addmm_linear(
     if bias is None:
         _, N = weight_T.shape
         bias = torch.zeros(N, dtype=input.dtype, device=input.device)
-    output = hipblaslt_fp16_addmm_op(input, weight_T, bias)
+    output = hipblaslt_addmm(bias, input, weight_T)
 
     output = output.reshape(output_shape)
     return output

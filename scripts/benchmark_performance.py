@@ -11,7 +11,8 @@ import colossalai
 import torch
 import torch.distributed as dist
 from colossalai.cluster import DistCoordinator
-from mmengine.runner import set_random_seed
+
+# from mmengine.runner import set_random_seed
 from tqdm import tqdm
 
 from opensora.acceleration.parallel_states import set_sequence_parallel_group
@@ -108,7 +109,8 @@ def main():
     else:
         coordinator = None
         enable_sequence_parallelism = False
-    set_random_seed(seed=cfg.get("seed", 1024))
+    # set_random_seed(seed=cfg.get("seed", 1024))
+    torch.manual_seed(seed=cfg.get("seed", 1024))
 
     # == init logger ==
     logger = create_logger()
