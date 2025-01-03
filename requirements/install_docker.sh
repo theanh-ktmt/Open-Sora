@@ -21,7 +21,6 @@ pip install bitsandbytes click contexttimer diffusers einops fabric fastapi galo
 # 6. (Inside Docker) Install Open-Sora
 cd ../Open-Sora
 pip install -v -e .
-pip install loguru onnxruntime
 
 # 6. (Inside Docker) Install flash-attn
 git clone https://github.com/ROCm/flash-attention.git

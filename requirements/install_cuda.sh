@@ -4,8 +4,8 @@
 conda create -n opensora python=3.10
 conda activate opensora
 
-# 2. Install torch, torchvision, xformers
-pip install -r requirements/requirements-rocm62.txt
+# 2. Install torch, torchvision, xformers (can replace with requirements-cuda121.txt)
+pip install -r requirements/requirements-cuda124.txt
 
 # 3. Install colossalai (avoid override torch)
 pip install colossalai --no-deps
@@ -19,8 +19,8 @@ git checkout tensorrt
 pip install -v -e .
 
 # 5. Install Flash Attention
-git clone https://github.com/ROCm/flash-attention.git
-cd flash-attention/
-git checkout c1d146cbd5becd9e33634b1310c2d27a49c7e862
-GPU_ARCHS=gfx942 python setup.py install # For MI300 series GPUs
-# GPU_ARCHS=gfx90a python setup.py install # For MI250 series GPUs
+pip install packaging ninja
+pip install flash-attn==2.6.3 --no-build-isolation
+
+# 6. Install Apex
+pip install -v --disable-pip-version-check --no-cache-dir --no-build-isolation --config-settings "--build-option=--cpp_ext" --config-settings "--build-option=--cuda_ext" git+https://github.com/NVIDIA/apex.git
