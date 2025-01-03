@@ -47,7 +47,7 @@ def hook_after_compiled():
         extern_kernels.mm = custom_func(extern_kernels.mm)
         logger.info("Skipped hooking after compiled because no backend provided.")
 
-    if CUSTOM_BACKEND == "hipblaslt":
+    elif CUSTOM_BACKEND == "hipblaslt":
         from modiffusion.ops.hipblaslt_gemm import hipblaslt_addmm_out, hipblaslt_mm_out
 
         extern_kernels.addmm = hipblaslt_addmm_out
