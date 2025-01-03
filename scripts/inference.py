@@ -1,7 +1,7 @@
 import os
 import sys
 
-os.environ["HIP_VISIBLE_DEVICES"] = "0"
+os.environ["HIP_VISIBLE_DEVICES"] = "3"
 os.environ["MIOPEN_DISABLE_CACHE"] = "1"
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 os.environ["ENABLE_XFORMERS"] = "1"
@@ -47,7 +47,7 @@ from opensora.utils.inference_utils import (
     split_prompt,
 )
 from opensora.utils.misc import all_exists, create_logger, is_distributed, is_main_process, to_torch_dtype
-from opensora.utils.quant import quant
+from opensora.utils.quant import quant, reset_step
 
 
 def main():
@@ -329,6 +329,7 @@ def main():
                 )
                 samples = vae.decode(samples.to(dtype), num_frames=num_frames)
                 video_clips.append(samples)
+                reset_step(model)
 
             # == save samples ==
             if is_main_process():

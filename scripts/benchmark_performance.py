@@ -1,12 +1,14 @@
 import os
 import sys
 
-os.environ["HIP_VISIBLE_DEVICES"] = "0"
+os.environ["HIP_VISIBLE_DEVICES"] = "3"
 os.environ["MIOPEN_DISABLE_CACHE"] = "1"
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 os.environ["ENABLE_XFORMERS"] = "1"
-os.environ["ENABLE_TORCHCOMPILE"] = "0"
+os.environ["ENABLE_TORCHCOMPILE"] = "1"
 os.environ["AUTOTUNE"] = "1"
+os.environ["TRITON_PRINT_AUTOTUNING"] = "1"
+os.environ["IS_PROFILING"] = "0"
 sys.path.append("/remote/vast0/share-mv/tien/project/Open-Sora/save")
 
 import json
@@ -53,6 +55,7 @@ from opensora.utils.inference_utils import (
     split_prompt,
 )
 from opensora.utils.misc import create_logger, is_distributed, is_main_process, to_torch_dtype
+from opensora.utils.quant import quant, reset_step
 
 VIDEO_GENERATION_PROMPTS = [
     "A day in the life of a busy city street from dawn to dusk.",
@@ -207,7 +210,7 @@ def main():
         model = replace_with_custom_layers(model)
 
         # quantize the model
-        # quant(model, 'int8')
+        quant(model, "int8")
 
         if is_torch_compile_enabled():
             if is_tensorrt_enabled():
@@ -393,6 +396,7 @@ def main():
             text_encoder_latencies.append(backbone_latency["text_encoder"])
 
             logger.info("End-to-end latency: {:.2f}s".format(end2end_latency))
+            reset_step(model)
 
             # == save samples ==
             if is_main_process():

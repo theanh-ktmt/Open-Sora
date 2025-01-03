@@ -26,3 +26,11 @@ def quant(model: torch.nn.Module, quant_mode: str = "int8", use_smoothquant: boo
     model.to(cur_device)
     model.to(torch.float16)
     print(model)
+
+
+def reset_step(model: torch.nn.Module):
+    all_modules = dict(model.named_modules())
+    for _, module in all_modules.items():
+        if isinstance(module, QuantSTDiT3Block):
+            module.step = 0
+    print("Reset step!")

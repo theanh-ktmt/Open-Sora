@@ -4,6 +4,7 @@ import torch
 import torch.nn as nn
 from einops import rearrange
 
+from opensora.models.layers.blocks import t2i_modulate
 from opensora.models.layers.quant_blocks import (
     CustomLayerNormWithScale,
     QuantAttention,
@@ -33,11 +34,20 @@ def custom_t_mask_select(x_mask, x, masked_x, T, S):
 
 
 class QuantSTDiT3Block(STDiT3Block):
-    def __init__(self, name: str = None, quant_mode: str = "int8", use_smoothquant: bool = False, *args, **kwargs):
+    def __init__(
+        self,
+        name: str = None,
+        quant_mode: str = "int8",
+        use_smoothquant: bool = False,
+        quant_mlp: bool = False,
+        *args,
+        **kwargs,
+    ):
         super().__init__(*args, **kwargs)
         self.name = name
         self.quant_mode = quant_mode
         self.step = 0
+        self.quant_mlp = quant_mlp
 
         if use_smoothquant:
             assert activations_dict is not None, "activations_dict is None"
@@ -51,6 +61,7 @@ class QuantSTDiT3Block(STDiT3Block):
         quant_mode: str = "int8",
         use_smoothquant: bool = False,
         alpha: float = 0.5,
+        quant_mlp: bool = False,
     ):
         block_index = module.block_index
         temporal = module.temporal
@@ -63,6 +74,7 @@ class QuantSTDiT3Block(STDiT3Block):
             name=name,
             quant_mode=quant_mode,
             use_smoothquant=use_smoothquant,
+            quant_mlp=quant_mlp,
             hidden_size=hidden_size,
             num_heads=num_heads,
             block_index=block_index,
@@ -85,9 +97,11 @@ class QuantSTDiT3Block(STDiT3Block):
             cross_attn_q_linear_max_weight = module.cross_attn.q_linear.weight.max(dim=0).values
             new_module.residual_smooth_scale = (cross_attn_q_linear_max_weight / cross_attn_q_linear_act) ** alpha
 
+        # new_module.old_norm1 = module.norm1
         new_module.norm1 = CustomLayerNormWithScale.from_original_module(
             module.norm1, name=f"{name}.norm1", quant_mode=quant_mode
         )
+        new_module.old_norm2 = module.norm2
         new_module.norm2 = CustomLayerNormWithScale.from_original_module(
             module.norm2, name=f"{name}.norm2", quant_mode=quant_mode
         )
@@ -97,19 +111,30 @@ class QuantSTDiT3Block(STDiT3Block):
             new_module.norm1.weight = norm1_scale
             new_module.norm2.weight = norm2_scale
 
+        # new_module.old_attn = module.attn
         new_module.attn = QuantAttention.from_original_module(
-            module=module.attn, name=f"{name}.attn", quant_mode=quant_mode, qkv_scale=1 / norm1_scale
+            module=module.attn,
+            name=f"{name}.attn",
+            quant_mode=quant_mode,
+            qkv_scale=1 / norm1_scale if norm1_scale is not None else None,
         )
         if module.enable_sequence_parallelism:
             raise NotImplementedError("Sequence parallelism is not supported in quantized mode")
+        # new_module.old_cross_attn = module.cross_attn
         new_module.cross_attn = QuantMultiHeadCrossAttention.from_original_module(
             module=module.cross_attn,
             name=f"{name}.cross_attn",
             quant_mode=quant_mode,
-            q_linear_scale=1 / new_module.residual_smooth_scale,
+            q_linear_scale=1 / new_module.residual_smooth_scale
+            if new_module.residual_smooth_scale is not None
+            else None,
         )
+        new_module.old_mlp = module.mlp
         new_module.mlp = QuantMlp.from_original_module(
-            module=module.mlp, name=f"{name}.mlp", quant_mode=quant_mode, fc1_scale=1 / norm2_scale
+            module=module.mlp,
+            name=f"{name}.mlp",
+            quant_mode=quant_mode,
+            fc1_scale=1 / norm2_scale if norm2_scale is not None else None,
         )
 
         new_module.drop_path = module.drop_path
@@ -148,18 +173,25 @@ class QuantSTDiT3Block(STDiT3Block):
                 self.scale_shift_table[None] + t0.reshape(B, 6, -1)
             ).chunk(6, dim=1)
 
+        # work
         # modulate (attention)
         x_m, x_m_zero, scale = self.norm1(x, scale_msa, shift_msa, scale_msa_zero, shift_msa_zero)
         if x_mask is not None:
             x_m = self.t_mask_select(x_mask, x_m, x_m_zero, T, S)
+        # x_m = t2i_modulate(self.old_norm1(x), shift_msa, scale_msa)
+        # if x_mask is not None:
+        #     x_m_zero = t2i_modulate(self.old_norm1(x), shift_msa_zero, scale_msa_zero)
+        #     x_m = self.t_mask_select(x_mask, x_m, x_m_zero, T, S)
 
         # attention
         if self.temporal:
             x_m = rearrange(x_m, "B (T S) C -> (B S) T C", T=T, S=S)
+            # x_m = self.old_attn(x_m)
             x_m = self.attn(x_m, scale)
             x_m = rearrange(x_m, "(B S) T C -> B (T S) C", T=T, S=S)
         else:
             x_m = rearrange(x_m, "B (T S) C -> (B T) S C", T=T, S=S)
+            # x_m = self.old_attn(x_m)
             x_m = self.attn(x_m, scale)
             x_m = rearrange(x_m, "(B T) S C -> B (T S) C", T=T, S=S)
 
@@ -172,16 +204,25 @@ class QuantSTDiT3Block(STDiT3Block):
         # residual
         x, sx, org_x = add_and_scale(x, x_m_s, self.residual_smooth_scale)  # self.drop_path(x_m_s)
 
-        # cross attention
+        # cross attention - work
         x = org_x + self.cross_attn(x, mha_key, mha_value, sx, mha_bias)
 
-        # modulate (MLP)
-        x_m, x_m_zero, scale = self.norm2(x, scale_mlp, shift_mlp, scale_mlp_zero, shift_mlp_zero)
-        if x_mask is not None:
-            x_m = self.t_mask_select(x_mask, x_m, x_m_zero, T, S)
+        if self.step <= 25:
+            # modulate (MLP)
+            x_m, x_m_zero, scale = self.norm2(x, scale_mlp, shift_mlp, scale_mlp_zero, shift_mlp_zero)
+            if x_mask is not None:
+                x_m = self.t_mask_select(x_mask, x_m, x_m_zero, T, S)
+            x_m = self.mlp(x_m, scale)
+        else:
+            x_m = t2i_modulate(self.old_norm2(x), shift_mlp, scale_mlp)
+            if x_mask is not None:
+                x_m_zero = t2i_modulate(self.old_norm2(x), shift_mlp_zero, scale_mlp_zero)
+                x_m = self.t_mask_select(x_mask, x_m, x_m_zero, T, S)
+            x_m = self.old_mlp(x_m)
 
         # MLP
-        x_m = self.mlp(x_m, scale)
+        # x_m = self.old_mlp(x_m)
+        # x_m = self.mlp(x_m, scale)
 
         # modulate (MLP)
         x_m_s = gate_mlp * x_m

@@ -5,6 +5,10 @@ import torch
 import triton
 import triton.language as tl
 
+from opensora.utils.misc import create_logger
+
+logger = create_logger()
+
 
 def is_weak_contiguous(x: torch.Tensor):
     strides = x.stride()
@@ -21,7 +25,7 @@ configs = [
     for bk in [128]  # , 1024]
 ]
 if os.environ.get("AUTOTUNE", "0") == "1":
-    print("Enable autotuning for scaled_mm")
+    logger.info("Enable autotuning for scaled_mm")
     configs = [
         triton.Config(
             {"BLOCK_SIZE_M": bm, "BLOCK_SIZE_N": bn, "BLOCK_SIZE_K": bk},

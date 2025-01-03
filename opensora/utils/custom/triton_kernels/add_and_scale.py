@@ -5,10 +5,13 @@ import triton
 import triton.language as tl
 
 from opensora.utils.custom.triton_kernels.utils import round
+from opensora.utils.misc import create_logger
+
+logger = create_logger()
 
 configs = [triton.Config({"BLOCK_SIZE": bs}, num_stages=ns, num_warps=nw) for bs in [2048] for ns in [4] for nw in [4]]
 if os.environ.get("AUTOTUNE", "0") == "1":
-    print("Enable autotuning for add_and_scale kernels")
+    logger.info("Enable autotuning for add_and_scale kernels")
     configs = [
         triton.Config({"BLOCK_SIZE": bs}, num_stages=ns, num_warps=nw)
         for bs in [2048]
