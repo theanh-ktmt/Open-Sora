@@ -1,3 +1,14 @@
+import os
+import sys
+
+os.environ["HIP_VISIBLE_DEVICES"] = "0"
+os.environ["MIOPEN_DISABLE_CACHE"] = "1"
+os.environ["TOKENIZERS_PARALLELISM"] = "false"
+os.environ["ENABLE_XFORMERS"] = "1"
+os.environ["ENABLE_TORCHCOMPILE"] = "0"
+os.environ["AUTOTUNE"] = "1"
+sys.path.append("/remote/vast0/share-mv/tien/project/Open-Sora/save")
+
 import json
 import pprint
 import time
@@ -59,7 +70,9 @@ VIDEO_GENERATION_PROMPTS = [
 N_PROMPTS = 5
 VIDEO_GENERATION_PROMPTS = VIDEO_GENERATION_PROMPTS[:N_PROMPTS]
 
-VIDEO_REFERENCES = ["save/references/sample.jpg"] * len(VIDEO_GENERATION_PROMPTS)
+VIDEO_REFERENCES = ["/remote/vast0/share-mv/tien/project/Open-Sora/save/references/sample.jpg"] * len(
+    VIDEO_GENERATION_PROMPTS
+)
 VIDEO_RESOLUTIONS = [
     # "144p",
     # "240p",
@@ -186,12 +199,15 @@ def main():
             log_model_dtype(model, save_dir / "stdit" / "dtype.log")
 
         # text_encoder.y_embedder = model.y_embedder  # HACK: for classifier-free guidance
-        load_y_embedder("save/weights/y_embedder.pth", device, dtype)
+        load_y_embedder("/remote/vast0/share-mv/tien/project/Open-Sora/save/weights/y_embedder.pth", device, dtype)
         text_encoder.y_embedder = get_y_embedder()
         # torch.save(text_encoder.y_embedder, "y_embedder.pth")
 
         # replace module layers with customed layers
         model = replace_with_custom_layers(model)
+
+        # quantize the model
+        # quant(model, 'int8')
 
         if is_torch_compile_enabled():
             if is_tensorrt_enabled():
@@ -394,6 +410,7 @@ def main():
                         save_path=save_path,
                         verbose=verbose >= 2,
                     )
+                    print("Saved video to", save_path)
                     if save_path.endswith(".mp4") and cfg.get("watermark", False):
                         time.sleep(1)  # prevent loading previous generated video
                         add_watermark(save_path)

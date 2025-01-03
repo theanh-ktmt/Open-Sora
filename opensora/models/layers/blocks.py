@@ -490,7 +490,7 @@ class MultiHeadCrossAttention(nn.Module):
         self.proj_drop = nn.Dropout(proj_drop)
 
     def forward(self, x, k, v, attn_bias=None):
-        # torch.save(self.kv_linear.state_dict(), "save/weights/kv_linear.{}.pth".format(self.name))
+        # torch.save(self.kv_linear.state_dict(), "/remote/vast0/share-mv/tien/project/Open-Sora/save/weights/kv_linear.{}.pth".format(self.name))
 
         # query/value: img tokens; key: condition; mask: if padding tokens
         B, N, C = x.shape

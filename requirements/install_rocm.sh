@@ -21,7 +21,7 @@ pip install --force-reinstall --no-deps https://github.com/bitsandbytes-foundati
 # -> Remove the cached_download import
 
 # Install additional dependencies
-pip install loguru onnxruntime
+pip install loguru onnxruntime av==13.1.0
 
 # Install Flash Attention
 git clone https://github.com/ROCm/flash-attention.git

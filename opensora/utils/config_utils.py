@@ -10,7 +10,11 @@ def parse_args(training=False):
     parser = argparse.ArgumentParser()
 
     # model config
-    parser.add_argument("config", help="model config file path")
+    parser.add_argument(
+        "--config",
+        default="/remote/vast0/share-mv/tien/project/Open-Sora/configs/anhtt/inference.py",
+        help="model config file path",
+    )
 
     # ======================================================
     # General
@@ -24,11 +28,11 @@ def parse_args(training=False):
     )
     parser.add_argument("--batch-size", default=None, type=int, help="batch size")
     parser.add_argument("--outputs", default=None, type=str, help="the dir to save model weights")
-    parser.add_argument("--flash-attn", default=None, type=str2bool, help="enable flash attention")
-    parser.add_argument("--layernorm-kernel", default=None, type=str2bool, help="enable layernorm kernel")
-    parser.add_argument("--resolution", default=None, type=str, help="multi resolution")
+    parser.add_argument("--flash-attn", default="true", type=str2bool, help="enable flash attention")
+    parser.add_argument("--layernorm-kernel", default="false", type=str2bool, help="enable layernorm kernel")
+    parser.add_argument("--resolution", default="720p", type=str, help="multi resolution")
     parser.add_argument("--data-path", default=None, type=str, help="path to data csv")
-    parser.add_argument("--dtype", default=None, type=str, help="data type")
+    parser.add_argument("--dtype", default="fp16", type=str, help="data type")
 
     # ======================================================
     # Inference
@@ -45,12 +49,12 @@ def parse_args(training=False):
 
         # prompt
         parser.add_argument("--prompt-path", default=None, type=str, help="path to prompt txt file")
-        parser.add_argument("--prompt", default=None, type=str, nargs="+", help="prompt list")
+        parser.add_argument("--prompt", default="a beautiful vocanic mountain", type=str, nargs="+", help="prompt list")
         parser.add_argument("--llm-refine", default=None, type=str2bool, help="enable LLM refine")
         parser.add_argument("--prompt-generator", default=None, type=str, help="prompt generator")
 
         # image/video
-        parser.add_argument("--num-frames", default=None, type=str, help="number of frames")
+        parser.add_argument("--num-frames", default="4s", type=str, help="number of frames")
         parser.add_argument("--fps", default=None, type=int, help="fps")
         parser.add_argument("--save-fps", default=None, type=int, help="save fps")
         parser.add_argument("--image-size", default=None, type=int, nargs=2, help="image size")
@@ -59,13 +63,19 @@ def parse_args(training=False):
         parser.add_argument("--watermark", default=None, type=str2bool, help="watermark video")
 
         # hyperparameters
-        parser.add_argument("--num-sampling-steps", default=None, type=int, help="sampling steps")
+        parser.add_argument("--num-sampling-steps", default=30, type=int, help="sampling steps")
         parser.add_argument("--cfg-scale", default=None, type=float, help="balance between cond & uncond")
 
         # reference
         parser.add_argument("--loop", default=None, type=int, help="loop")
         parser.add_argument("--condition-frame-length", default=None, type=int, help="condition frame length")
-        parser.add_argument("--reference-path", default=None, type=str, nargs="+", help="reference path")
+        parser.add_argument(
+            "--reference-path",
+            default="/remote/vast0/share-mv/tien/project/Open-Sora/save/references/sample.jpg",
+            type=str,
+            nargs="+",
+            help="reference path",
+        )
         parser.add_argument("--mask-strategy", default=None, type=str, nargs="+", help="mask strategy")
         parser.add_argument("--aes", default=None, type=float, help="aesthetic score")
         parser.add_argument("--flow", default=None, type=float, help="flow score")

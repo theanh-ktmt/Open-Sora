@@ -112,7 +112,7 @@ model = (
 )
 # text_encoder.y_embedder = model.y_embedder  # HACK: for classifier-free guidance
 # logger.info("Model:\n{}".format(model))
-load_y_embedder("save/weights/y_embedder.pth", device, dtype)
+load_y_embedder("/remote/vast0/share-mv/tien/project/Open-Sora/save/weights/y_embedder.pth", device, dtype)
 text_encoder.y_embedder = get_y_embedder()
 
 
@@ -164,7 +164,7 @@ model_args.update(additional_args)
 
 # Image conditioning
 logger.info("Embedding images...")
-refs = ["/home/tran/workspace/Open-Sora/save/references/sample.jpg"]
+refs = ["/home/tran/workspace/Open-Sora//remote/vast0/share-mv/tien/project/Open-Sora/save/references/sample.jpg"]
 mask_strategy = [""]
 
 prompts, refs, ms = extract_json_from_prompts(prompts, refs, mask_strategy)
@@ -210,7 +210,7 @@ mha_kvs = prepare_mha_kv(
     num_heads=num_heads,
     dtype=dtype,
     device=device,
-    ckpt_dir="save/weights/kv_linear",
+    ckpt_dir="/remote/vast0/share-mv/tien/project/Open-Sora/save/weights/kv_linear",
 )
 mha_bias = prepare_mha_bias(z, model_args["mask"], y_lens, dtype, device)
 

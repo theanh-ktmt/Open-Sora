@@ -1,7 +1,7 @@
 import os
 import sys
 
-os.environ["HIP_VISIBLE_DEVICES"] = "0"
+os.environ["HIP_VISIBLE_DEVICES"] = "6"
 os.environ["MIOPEN_DISABLE_CACHE"] = "1"
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 os.environ["ENABLE_XFORMERS"] = "1"
@@ -24,6 +24,7 @@ from opensora.datasets import save_sample
 from opensora.datasets.aspect import get_image_size, get_num_frames
 from opensora.models.text_encoder.t5 import text_preprocessing
 from opensora.registry import MODELS, SCHEDULERS, build_module
+from opensora.utils.collect_activations import CollectLinearInputs, activations_dict
 from opensora.utils.config_utils import parse_configs
 from opensora.utils.custom.compile import compile_module, is_torch_compile_enabled
 from opensora.utils.custom.layers import replace_with_custom_layers
@@ -40,14 +41,42 @@ from opensora.utils.inference_utils import (
     extract_json_from_prompts,
     extract_prompts_loop,
     get_save_path_name,
-    load_prompts,
     merge_prompt,
     prepare_multi_resolution_info,
     refine_prompts_by_openai,
     split_prompt,
 )
 from opensora.utils.misc import all_exists, create_logger, is_distributed, is_main_process, to_torch_dtype
-from opensora.utils.quant import quant
+
+prompts = [
+    "A beautiful sunset over the city",
+    "A beach with palm trees and a sunset",
+    "Energetic man doing fitness training",
+    "A coffee cafe displaying a variety of coffee brands",
+    "A site engineer monitoring different aspects of a construction project",
+    "Promo video of Adidas sneakers",
+]
+
+
+def replace_activations_collection_linear_layers(model):
+    cur_device = model.device
+    all_modules = dict(model.named_modules())
+    torch.set_grad_enabled(False)
+
+    print("Replacing with custom linear layers")
+    for name, module in all_modules.items():
+        if isinstance(module, torch.nn.Linear):
+            parent_module = all_modules[".".join(name.split(".")[:-1])]
+            setattr(
+                parent_module,
+                name.split(".")[-1],
+                CollectLinearInputs.from_original_module(module, name=name),
+            )
+    print("Replacement finishes!")
+
+    model.to(cur_device)
+    model.to(torch.float16)
+    print(model)
 
 
 def main():
@@ -139,8 +168,8 @@ def main():
     # replace module layers with customed layers
     model = replace_with_custom_layers(model)
 
-    # quantize the model
-    quant(model, "int8")
+    # replace linear layers with activations collector
+    replace_activations_collection_linear_layers(model)
 
     if is_torch_compile_enabled():
         if is_tensorrt_enabled():
@@ -159,20 +188,20 @@ def main():
     # inference
     # ======================================================
     # == load prompts ==
-    prompts = cfg.get("prompt", None)
+    # prompts = cfg.get("prompt", None)
     start_idx = cfg.get("start_index", 0)
-    if prompts is None:
-        if cfg.get("prompt_path", None) is not None:
-            prompts = load_prompts(cfg.prompt_path, start_idx, cfg.get("end_index", None))
-        else:
-            prompts = [cfg.get("prompt_generator", "")] * 1_000_000  # endless loop
+    # if prompts is None:
+    #     if cfg.get("prompt_path", None) is not None:
+    #         prompts = load_prompts(cfg.prompt_path, start_idx, cfg.get("end_index", None))
+    #     else:
+    #         prompts = [cfg.get("prompt_generator", "")] * 1_000_000  # endless loop
 
-    if isinstance(prompts, str):
-        prompts = [prompts]
+    # if isinstance(prompts, str):
+    #     prompts = [prompts]
 
     # == prepare reference ==
-    reference_path = cfg.get("reference_path", [""] * len(prompts))
-    mask_strategy = cfg.get("mask_strategy", [""] * len(prompts))
+    reference_path = [""] * len(prompts)
+    mask_strategy = [""] * len(prompts)
     if isinstance(reference_path, str):
         reference_path = [reference_path]
 
@@ -352,6 +381,10 @@ def main():
         start_idx += len(batch_prompts)
     logger.info("Inference finished.")
     logger.info("Saved %s samples to %s", start_idx, save_dir)
+
+    fp = "/remote/vast0/share-mv/tien/project/Open-Sora/save/quantization/activations_dict.pth"
+    os.makedirs(os.path.dirname(fp), exist_ok=True)
+    torch.save(activations_dict, fp)
 
 
 if __name__ == "__main__":

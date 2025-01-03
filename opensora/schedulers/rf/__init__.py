@@ -120,7 +120,7 @@ class RFLOW:
             num_heads=num_heads,
             dtype=self.dtype,
             device=self.device,
-            ckpt_dir="save/weights/kv_linear",
+            ckpt_dir="/remote/vast0/share-mv/tien/project/Open-Sora/save/weights/kv_linear",
         )
         # Prepare position embedding
         prepare_pos_emb(
