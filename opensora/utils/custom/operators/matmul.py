@@ -2,7 +2,6 @@ from typing import List, Tuple
 
 import torch
 import torch.nn.functional as F
-from modiffusion.ops.ck_mm import SUPPORTED_SHAPES, ck_fp16_mm_op
 
 
 def get_available_shapes(in_channels: int, out_channels: int) -> List[Tuple[int, int, int]]:
@@ -19,6 +18,8 @@ def get_available_shapes(in_channels: int, out_channels: int) -> List[Tuple[int,
     Raises:
         NotImplementedError: If the given linear are not supported or not implemented.
     """
+    from modiffusion.ops.ck_mm import SUPPORTED_SHAPES
+    
     # Filter shapes that match the in_channels and out_channels
     matched_shapes = []
     for shape in SUPPORTED_SHAPES:
@@ -44,6 +45,8 @@ def ck_matmul_linear(
     available_shapes: List[Tuple[int]] = [],
 ) -> torch.Tensor:
     """CK Matrix Multiplication for Linear layer."""
+    from modiffusion.ops.ck_mm import ck_fp16_mm_op
+
     assert input.is_contiguous() and weight_T.is_contiguous(), "Both tensors used for CK matmul must be contiguous."
     assert input.shape[-1] == weight_T.shape[0], f"Invalid shape {input.shape[-1]} != {weight_T.shape[0]}."
 
