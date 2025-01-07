@@ -28,3 +28,4 @@ openai
 loguru
 onnxruntime
 pytest
+mlflow

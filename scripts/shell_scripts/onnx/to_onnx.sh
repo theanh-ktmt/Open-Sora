@@ -22,19 +22,19 @@ measure_time() {
 }
 
 # Run ONNX on FP32
-# echo "Preparing input..."
-# measure_time python scripts/onnx/prepare_input.py --data-dir "$DATA_DIR" --resolution $RESOLUTION --duration $DURATION
+echo "Preparing input..."
+measure_time python scripts/onnx/prepare_input.py --data-dir "$DATA_DIR" --resolution $RESOLUTION --duration $DURATION
 
-# echo "Exporting to ONNX..."
-# measure_time python scripts/onnx/export_onnx.py --data-dir "$DATA_DIR" --onnx-path "$ONNX_PATH"
+echo "Exporting to ONNX..."
+measure_time python scripts/onnx/export_onnx.py --data-dir "$DATA_DIR" --onnx-path "$ONNX_PATH"
 
-# echo "Shape Inference ONNX architecture..."
-# measure_time python scripts/onnx/shape_inference.py --input "$ONNX_PATH" --output "$INFERRED_PATH"
+echo "Shape Inference ONNX architecture..."
+measure_time python scripts/onnx/shape_inference.py --input "$ONNX_PATH" --output "$INFERRED_PATH"
 
-# echo "Simplify ONNX graph..."
-# measure_time onnxsim $INFERRED_PATH $SIMPLIFIED_PATH
+echo "Simplify ONNX graph..."
+measure_time onnxsim $INFERRED_PATH $SIMPLIFIED_PATH
 
-# Run TensorRT with desired precision
+# Check onnx model
 echo "Comparing ONNX outputs..."
 measure_time python scripts/onnx/check_onnx.py \
     --data-dir "$DATA_DIR" \

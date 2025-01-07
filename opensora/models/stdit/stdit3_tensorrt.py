@@ -1,5 +1,4 @@
 import numpy as np
-import pycuda.autoinit
 import pycuda.driver as cuda
 import tensorrt as trt
 import torch
@@ -58,7 +57,8 @@ class STDiT3TRT:
         return inputs, outputs, bindings, stream
 
     def __call__(self, **kwargs) -> torch.Tensor:
-        logger.info("Start inference...")
+        if self.verbose:
+            logger.info("Start inference...")
 
         # for multiple inputs
         # copy input data to GPU
