@@ -1,6 +1,7 @@
 import os
 from typing import Any, Dict, Optional
 
+import mlflow
 import torch
 import torch.nn as nn
 from loguru import logger
@@ -50,6 +51,7 @@ def hook_after_compiled():
     elif CUSTOM_BACKEND == "hipblaslt":
         from modiffusion.ops.hipblaslt_gemm import hipblaslt_addmm_out, hipblaslt_mm_out
 
+        mlflow.set_tag("hook_after", CUSTOM_BACKEND)
         extern_kernels.addmm = hipblaslt_addmm_out
         extern_kernels.mm = hipblaslt_mm_out
         logger.info("Done hooked after compile for backend '{}'.".format(CUSTOM_BACKEND))
@@ -73,6 +75,7 @@ def compile_module(
         # "fullgraph": True,        # not working
     }
     configs = DEFAULT_CONFIGS if configs is None else configs
+    mlflow.log_params({f"compile_{k}": v for k, v in configs.items()})
 
     # start compile
     logger.info("Start compiling...")
