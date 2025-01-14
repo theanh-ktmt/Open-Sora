@@ -8,7 +8,6 @@ from pathlib import Path
 from pprint import pformat
 
 import colossalai
-import mlflow
 import torch
 import torch.distributed as dist
 from colossalai.cluster import DistCoordinator
@@ -125,10 +124,14 @@ def main():
     mlflow_manager.start_run(cfg)
     logger.info("Initialized MLFlow logging.")
 
-    mlflow.log_param("prompts", VIDEO_GENERATION_PROMPTS)
-    mlflow.log_param("resolutions", VIDEO_RESOLUTIONS)
-    mlflow.log_param("lengths", VIDEO_LENGTHS)
-    mlflow.log_param("aspect_ratio", ASPECT_RATIO)
+    MLFlowManager.log_params(
+        {
+            "prompts": VIDEO_GENERATION_PROMPTS,
+            "resolutions": VIDEO_RESOLUTIONS,
+            "lengths": VIDEO_LENGTHS,
+            "aspect_ratio": ASPECT_RATIO,
+        }
+    )
 
     # ======================================================
     # build model & load weights
@@ -174,7 +177,7 @@ def main():
         latent_size = vae.get_latent_size(input_size)
 
         if is_tensorrt_enabled():
-            mlflow.set_tag("tensorrt", "True")
+            MLFlowManager.set_tag("tensorrt")
             from opensora.models.stdit.stdit3_tensorrt import STDiT3TRT
 
             assert "STDiT3" in cfg.model.type, "Model '{}' is not supported by TensorRT at the moment.".format(
@@ -209,7 +212,7 @@ def main():
         model = replace_with_custom_layers(model)
 
         if is_torch_compile_enabled():
-            mlflow.set_tag("torch.compile", "True")
+            MLFlowManager.set_tag("torch.compile")
             if is_tensorrt_enabled():
                 warnings.warn("TensorRT and torch.compile are not working along! Shutting down.")
                 exit(0)
@@ -272,11 +275,6 @@ def main():
             )
             image_encoder_latencies.append(batched_image_encoder_latencies[0])  # batch 1
             logger.info("Image Encoder Latency: {}s.".format(image_encoder_latencies[-1]))
-            mlflow.log_metric(
-                "{}_{}_image_encoder_latencies".format(video_resolution, video_length),
-                image_encoder_latencies[-1],
-                step=i,
-            )
 
             # == multi-resolution info ==
             model_args = prepare_multi_resolution_info(
@@ -398,16 +396,14 @@ def main():
             text_encoder_latencies.append(backbone_latency["text_encoder"])
 
             # Log to MLFlow
-            mlflow.log_metric(
-                "{}_{}_text_encoder_latencies".format(video_resolution, video_length),
-                text_encoder_latencies[-1],
+            MLFlowManager.log_metrics(
+                {
+                    f"{video_resolution}_{video_length}_image_encoder_latencies": image_encoder_latencies[-1],
+                    f"{video_resolution}_{video_length}_text_encoder_latencies": text_encoder_latencies[-1],
+                    f"{video_resolution}_{video_length}_backbone_latencies": backbone_latencies[-1],
+                    f"{video_resolution}_{video_length}_end2end_latencies": end2end_latencies[-1],
+                },
                 step=i,
-            )
-            mlflow.log_metric(
-                "{}_{}_backbone_latencies".format(video_resolution, video_length), backbone_latencies[-1], step=i
-            )
-            mlflow.log_metric(
-                "{}_{}_end2end_latencies".format(video_resolution, video_length), end2end_latencies[-1], step=i
             )
 
             logger.info("End-to-end latency: {:.2f}s".format(end2end_latency))
@@ -434,7 +430,7 @@ def main():
 
                     # Log generated videos
                     # logger.info("Log generated video {} to MLFlow".format(save_path))
-                    # mlflow.log_artifact(save_path, "videos")
+                    # MLFlowManager.log_artifact(save_path, "videos")
             start_idx += len(batch_prompts)
 
         # Done a combination (Remove first sample for warmup)
@@ -461,7 +457,7 @@ def main():
             json.dump(results, f)
 
         logger.info("Log benchmark results to MLFlow")
-        mlflow.log_artifact(save_dir, "benchmark_results")
+        MLFlowManager.log_artifact(save_dir, "benchmark_results")
 
     logger.info("Latency information:\n {}".format(pprint.pformat(results)))
 

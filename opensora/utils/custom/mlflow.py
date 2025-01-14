@@ -1,10 +1,13 @@
 import os
 import subprocess
 from datetime import datetime
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Union
 
 import mlflow
 from loguru import logger
+
+ENABLE_MLFLOW = os.environ.get("ENABLE_MLFLOW", "0") == "1"
+logger.info("Enable MLFLow Logging: {}".format(ENABLE_MLFLOW))
 
 
 class MLFlowManager:
@@ -20,7 +23,11 @@ class MLFlowManager:
             self.initialized = True
             self.exp_name = exp_name
 
-    def setup_experiment(self):
+    def setup_experiment(self) -> None:
+        """Setup experiment information. Setup tracking URI and creating experiment."""
+        if not ENABLE_MLFLOW:
+            return
+
         # set mlflow tracking URI
         mlflow_tracking_uri = os.getenv("MLFLOW_TRACKING_URI", None)
         if mlflow_tracking_uri:
@@ -35,13 +42,17 @@ class MLFlowManager:
             experiment = mlflow.get_experiment_by_name(self.exp_name)
             self.exp_id = experiment.experiment_id
 
-    def start_run(self, config: Optional[Dict[str, Any]]):
+    def start_run(self, config: Optional[Dict[str, Any]]) -> None:
+        """Start a new run."""
+        if not ENABLE_MLFLOW:
+            return
+
         # setup experiment
         self.setup_experiment()
 
         # start run
         now = datetime.now()
-        run_name = f"run_{now.strftime('%Y%m%d%H%M%S')}"
+        run_name = f"run_{now.strftime('%Y%m%d_%H%M%S')}"
         mlflow.start_run(run_name=run_name, experiment_id=self.exp_id)
 
         # Log config
@@ -56,8 +67,64 @@ class MLFlowManager:
         # Log commit hash
         mlflow.log_param("commit_hash", get_current_commit_hash())
 
-    def end_run(self):
+    def end_run(self) -> None:
+        """End current run."""
+        if not ENABLE_MLFLOW:
+            return
         mlflow.end_run()
+
+    @staticmethod
+    def set_tag(tag: str, value: Optional[str] = None) -> None:
+        if not ENABLE_MLFLOW:
+            return
+        if value:
+            mlflow.set_tag(tag, value)
+        else:
+            mlflow.set_tag(tag, "True")
+
+    @staticmethod
+    def log_params(params: Dict[str, Any]) -> None:
+        if not ENABLE_MLFLOW:
+            return
+        mlflow.log_params(params)
+
+    @staticmethod
+    def log_metric(key: str, value: float, step: int = 0) -> None:
+        if not ENABLE_MLFLOW:
+            return
+        mlflow.log_metric(key, value, step)
+
+    @staticmethod
+    def log_metrics(metrics: Dict[str, Any], step: int = 0) -> None:
+        if not ENABLE_MLFLOW:
+            return
+
+        for key, value in metrics.items():
+            mlflow.log_metric(key, value, step)
+
+    @staticmethod
+    def log_artifact(path: str, dest_dir: str) -> None:
+        if not ENABLE_MLFLOW:
+            return
+
+        if os.path.isdir(path):
+            mlflow.log_artifacts(path, dest_dir)
+        elif os.path.isfile(path):
+            mlflow.log_artifact(path, dest_dir)
+        else:
+            raise NotImplementedError("Path {} is neither file nor directory.".format(path))
+
+    @staticmethod
+    def log_file(input: Union[str, dict], filepath: str) -> None:
+        if not ENABLE_MLFLOW:
+            return
+
+        if isinstance(input, str):
+            mlflow.log_text(input, filepath)
+        elif isinstance(input, dict):
+            mlflow.log_dict(input, filepath)
+        else:
+            raise NotImplementedError("Unsupported dtype: {}".format(type(input)))
 
 
 def get_requirement_list() -> str:

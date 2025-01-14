@@ -1,11 +1,11 @@
 """Replace Open-Sora layers with our customed layers.
 This equals to hook before compiled."""
 
-import mlflow
 import torch.nn as nn
 from loguru import logger
 
 from opensora.utils.custom.compile import get_custom_backend
+from opensora.utils.custom.mlflow import MLFlowManager
 
 
 def replace_with_custom_layers(module: nn.Module) -> nn.Module:
@@ -16,7 +16,7 @@ def replace_with_custom_layers(module: nn.Module) -> nn.Module:
         logger.info("Customed backend is None or module is not nn.Module. Keep the origin module.")
         return module
 
-    mlflow.set_tag("hook_before", custom_backend)
+    MLFlowManager.set_tag("hook_before", custom_backend)
     if custom_backend == "ck":
         module = replace_with_ck_layers(module)
     elif custom_backend == "hipblaslt":
@@ -25,7 +25,7 @@ def replace_with_custom_layers(module: nn.Module) -> nn.Module:
         raise NotImplementedError(
             "Backend '{}' is currently not supported for hooking before 'torch.compile'!".format(custom_backend)
         )
-    mlflow.log_text(str(module), "model/backbone_after_hooked_before.txt")
+    MLFlowManager.log_text(str(module), "model/backbone_after_hooked_before.txt")
 
     logger.info(f"Model after replacements:\n{module}")
     return module

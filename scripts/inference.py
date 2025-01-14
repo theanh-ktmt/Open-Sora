@@ -4,7 +4,6 @@ import warnings
 from pprint import pformat
 
 import colossalai
-import mlflow
 import torch
 import torch.distributed as dist
 from colossalai.cluster import DistCoordinator
@@ -90,9 +89,9 @@ def main():
     logger.info("Building models...")
     # == build text-encoder and vae ==
     text_encoder = build_module(cfg.text_encoder, MODELS, device=device)
-    mlflow.log_text(str(text_encoder), "model/text_encoder.txt")
+    MLFlowManager.log_file(str(text_encoder), "model/text_encoder.txt")
     vae = build_module(cfg.vae, MODELS).to(device, dtype).eval()
-    mlflow.log_text(str(vae), "model/image_encoder.txt")
+    MLFlowManager.log_file(str(vae), "model/image_encoder.txt")
 
     # == prepare video size ==
     image_size = cfg.get("image_size", None)
@@ -110,7 +109,7 @@ def main():
     latent_size = vae.get_latent_size(input_size)
 
     if is_tensorrt_enabled():
-        mlflow.set_tag("tensorrt", "True")
+        MLFlowManager.set_tag("tensorrt")
         from opensora.models.stdit.stdit3_tensorrt import STDiT3TRT
 
         assert "STDiT3" in cfg.model.type, "Model '{}' is not supported by TensorRT at the moment.".format(
@@ -133,7 +132,7 @@ def main():
             .to(device, dtype)
             .eval()
         )
-        mlflow.log_text(str(model), "model/backbone.txt")
+        MLFlowManager.log_file(str(model), "model/backbone.txt")
 
     # text_encoder.y_embedder = model.y_embedder  # HACK: for classifier-free guidance
     load_y_embedder("save/weights/y_embedder.pth", device, dtype)
@@ -144,7 +143,7 @@ def main():
     model = replace_with_custom_layers(model)
 
     if is_torch_compile_enabled():
-        mlflow.set_tag("torch.compile", "True")
+        MLFlowManager.set_tag("torch.compile")
         if is_tensorrt_enabled():
             warnings.warn("TensorRT and torch.compile are not working along! Shutting down.")
             exit(0)
@@ -346,15 +345,19 @@ def main():
 
                     # Log generated videos
                     logger.info("Log generated video {} to MLFlow".format(save_path))
-                    mlflow.log_artifact(save_path, "videos")
+                    MLFlowManager.log_artifact(save_path, "videos")
         start_idx += len(batch_prompts)
 
     if is_profiling:
         logger.info("Log profiling data to MLFLow...")
-        mlflow.set_tag("profile", "True")
-        mlflow.log_param("profiled_sample_idx", target_sample)
-        mlflow.log_param("profile_output_dir", profile_dir)
-        mlflow.log_artifact(profile_dir, "profiling_data")
+        MLFlowManager.set_tag("profile")
+        MLFlowManager.log_params(
+            {
+                "profiled_sample_idx": target_sample,
+                "profile_output_dir": profile_dir,
+            }
+        )
+        MLFlowManager.log_artifact(profile_dir, "profiling_data")
 
     logger.info("Stopped MLFlow logging.")
     mlflow_manager.end_run()

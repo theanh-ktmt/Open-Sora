@@ -13,7 +13,6 @@ import functools
 import math
 from typing import Optional
 
-import mlflow
 import numpy as np
 import torch
 import torch.distributed as dist
@@ -25,6 +24,7 @@ from timm.models.vision_transformer import Mlp
 
 from opensora.acceleration.communications import all_to_all, split_forward_gather_backward
 from opensora.acceleration.parallel_states import get_sequence_parallel_group
+from opensora.utils.custom.mlflow import MLFlowManager
 from opensora.utils.custom.operators import padded_xformers_attn, triton_flash_attn_bhsd
 from opensora.utils.custom.operators.xformers import (
     block_diagonal_mask,
@@ -200,7 +200,7 @@ class Attention(nn.Module):
                 k = self.rotary_emb(k)
 
         if enable_flash_attn:
-            mlflow.set_tag("self_attn.spatial_blocks", "flash_attn")
+            MLFlowManager.set_tag("self_attn.spatial_blocks", "flash_attn")
             from flash_attn import flash_attn_func
 
             # (B, #heads, N, #dim) -> (B, N, #heads, #dim)
@@ -217,7 +217,7 @@ class Attention(nn.Module):
             )
         else:
             # old torch-impl attn
-            # mlflow.set_tag("self_attn.temporal_blocks", "torch_impl_attn")
+            # MLFlowManager.set_tag("self_attn.temporal_blocks", "torch_impl_attn")
             # dtype = q.dtype
             # q = q * self.scale
             # attn = q @ k.transpose(-2, -1)  # translate attn to float32
@@ -233,12 +233,12 @@ class Attention(nn.Module):
             # x = x.transpose(1, 2)  # transpose to 'bshd'
 
             # triton-bhsd
-            mlflow.set_tag("self_attn.temporal_blocks", "triton_bhsd_attn")
+            MLFlowManager.set_tag("self_attn.temporal_blocks", "triton_bhsd_attn")
             x = triton_flash_attn_bhsd(q, k, v)
             x = x.transpose(1, 2)  # transpose to 'bshd'
 
             # triton-bshd
-            # mlflow.set_tag("self_attn.temporal_blocks", "triton_bshd_attn")
+            # MLFlowManager.set_tag("self_attn.temporal_blocks", "triton_bshd_attn")
             # q = q.transpose(1, 2)
             # k = k.transpose(1, 2)
             # v = v.transpose(1, 2)
@@ -507,18 +507,18 @@ class MultiHeadCrossAttention(nn.Module):
 
         # xformers default impls
         # if enable_xformers:
-        #     mlflow.set_tag("multihead_attn", "xformers_default_attn")
-        #     attn_bias = attn_bias.unsqueeze(0).unsqueeze(1).expand(1, 16, 216000, 600)
+        #     MLFlowManager.set_tag("multihead_attn", "xformers_default_attn")
+        #     attn_bias = attn_bias.broadcast_to(1, 16, 216000, 600)
         #     x = xformers.ops.memory_efficient_attention(q, k, v, p=self.attn_drop.p, attn_bias=attn_bias)
         #     x = x.view(B, -1, C)
         # else:
-        #     mlflow.set_tag("multihead_attn", "torch_impl_attn")
+        #     MLFlowManager.set_tag("multihead_attn", "torch_impl_attn")
         #     x = memory_efficient_attention(q, k, v, p=self.attn_drop.p, attn_bias=attn_bias)
         #     x = x.reshape(B, -1, C)
 
         # pytorch default impls
-        # mlflow.set_tag("multihead_attn", "torch_default_attn")
-        # attn_bias = attn_bias.unsqueeze(0).unsqueeze(1).expand(1, 16, 216000, 600)
+        # MLFlowManager.set_tag("multihead_attn", "torch_default_attn")
+        # attn_bias = attn_bias.broadcast_to(1, 16, 216000, 600)
         # q = q.transpose(1, 2) # transpose to 'bhsd' layout
         # k = k.transpose(1, 2) # transpose to 'bhsd' layout
         # v = v.transpose(1, 2) # transpose to 'bhsd' layout
@@ -527,8 +527,8 @@ class MultiHeadCrossAttention(nn.Module):
         # x = x.reshape(B, -1, C)
 
         # padded xformers default
-        mlflow.set_tag("multihead_attn", "padded_xformers_default_attn")
-        attn_bias = attn_bias.unsqueeze(0).unsqueeze(1).expand(1, 16, 216000, 600)
+        MLFlowManager.set_tag("multihead_attn", "padded_xformers_default_attn")
+        attn_bias = attn_bias.broadcast_to(1, 16, 216000, 600)
         x = padded_xformers_attn(q, k, v, attn_bias=attn_bias)
         x = x.reshape(B, -1, C)
 
