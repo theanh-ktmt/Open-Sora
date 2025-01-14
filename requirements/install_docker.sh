@@ -30,4 +30,4 @@ GPU_ARCHS=gfx942 python setup.py install # For MI300 series GPUs
 # GPU_ARCHS=gfx90a python setup.py install # For MI250 series GPUs
 
 # 7. (Inside Docker) Install xformers (only rocm 6.1 is available and build from source not runnable for rocm 6.2)
-pip install xformers==0.0.28 --index-url https://download.pytorch.org/whl/rocm6.1
+pip install xformers==0.0.29 --index-url https://download.pytorch.org/whl/rocm6.1
