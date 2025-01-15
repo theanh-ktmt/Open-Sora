@@ -27,7 +27,7 @@ def replace_with_custom_layers(module: nn.Module) -> nn.Module:
         raise NotImplementedError(
             "Backend '{}' is currently not supported for hooking before 'torch.compile'!".format(custom_backend)
         )
-    MLFlowManager.log_text(str(module), "model/backbone_after_hooked_before.txt")
+    MLFlowManager.log_file(str(module), "model/backbone_after_hooked_before.txt")
 
     logger.info(f"Model after replacements:\n{module}")
     return module
