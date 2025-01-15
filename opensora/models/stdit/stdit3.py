@@ -5,7 +5,8 @@ import torch
 import torch.distributed as dist
 import torch.nn as nn
 from einops import rearrange
-from rotary_embedding_torch import RotaryEmbedding
+
+# from rotary_embedding_torch import RotaryEmbedding
 from timm.models.layers import DropPath
 from timm.models.vision_transformer import Mlp
 from transformers import PretrainedConfig, PreTrainedModel
@@ -29,6 +30,7 @@ from opensora.models.layers.blocks import (
 )
 from opensora.registry import MODELS
 from opensora.utils.ckpt_utils import load_checkpoint
+from opensora.utils.custom.layers import RotaryEmbedding
 from opensora.utils.custom.pos_emb import get_pos_emb
 from opensora.utils.misc import create_logger
 
@@ -292,7 +294,8 @@ class STDiT3(PreTrainedModel):
                     block_index=i,
                     # temporal
                     temporal=True,
-                    rope=self.rope.rotate_queries_or_keys,
+                    # rope=self.rope.rotate_queries_or_keys,
+                    rope=self.rope,
                 )
                 for i in range(config.depth)
             ]
@@ -520,31 +523,238 @@ class STDiT3(PreTrainedModel):
         x = rearrange(x, "B T S C -> B (T S) C", T=T, S=S)
 
         # === blocks ===
-        for i, (spatial_block, temporal_block) in enumerate(zip(self.spatial_blocks, self.temporal_blocks)):
-            x = auto_grad_checkpoint(
-                spatial_block,
-                x,
-                t_mlp,
-                locals()[f"mha_s{i:02}_k"],
-                locals()[f"mha_s{i:02}_v"],
-                mha_bias,
-                x_mask,
-                t0_mlp,
-                T,
-                S,
-            )
-            x = auto_grad_checkpoint(
-                temporal_block,
-                x,
-                t_mlp,
-                locals()[f"mha_t{i:02}_k"],
-                locals()[f"mha_t{i:02}_v"],
-                mha_bias,
-                x_mask,
-                t0_mlp,
-                T,
-                S,
-            )
+
+        # NOTE: flatten impl
+        # block 00
+        x = auto_grad_checkpoint(self.spatial_blocks[0], x, t_mlp, mha_s00_k, mha_s00_v, mha_bias, x_mask, t0_mlp, T, S)
+        x = auto_grad_checkpoint(
+            self.temporal_blocks[0], x, t_mlp, mha_t00_k, mha_t00_v, mha_bias, x_mask, t0_mlp, T, S
+        )
+
+        # block 01
+        x = auto_grad_checkpoint(self.spatial_blocks[1], x, t_mlp, mha_s01_k, mha_s01_v, mha_bias, x_mask, t0_mlp, T, S)
+        x = auto_grad_checkpoint(
+            self.temporal_blocks[1], x, t_mlp, mha_t01_k, mha_t01_v, mha_bias, x_mask, t0_mlp, T, S
+        )
+
+        # block 02
+        x = auto_grad_checkpoint(self.spatial_blocks[2], x, t_mlp, mha_s02_k, mha_s02_v, mha_bias, x_mask, t0_mlp, T, S)
+        x = auto_grad_checkpoint(
+            self.temporal_blocks[2], x, t_mlp, mha_t02_k, mha_t02_v, mha_bias, x_mask, t0_mlp, T, S
+        )
+
+        # block 03
+        x = auto_grad_checkpoint(self.spatial_blocks[3], x, t_mlp, mha_s03_k, mha_s03_v, mha_bias, x_mask, t0_mlp, T, S)
+        x = auto_grad_checkpoint(
+            self.temporal_blocks[3], x, t_mlp, mha_t03_k, mha_t03_v, mha_bias, x_mask, t0_mlp, T, S
+        )
+
+        # block 04
+        x = auto_grad_checkpoint(self.spatial_blocks[4], x, t_mlp, mha_s04_k, mha_s04_v, mha_bias, x_mask, t0_mlp, T, S)
+        x = auto_grad_checkpoint(
+            self.temporal_blocks[4], x, t_mlp, mha_t04_k, mha_t04_v, mha_bias, x_mask, t0_mlp, T, S
+        )
+
+        # block 05
+        x = auto_grad_checkpoint(self.spatial_blocks[5], x, t_mlp, mha_s05_k, mha_s05_v, mha_bias, x_mask, t0_mlp, T, S)
+        x = auto_grad_checkpoint(
+            self.temporal_blocks[5], x, t_mlp, mha_t05_k, mha_t05_v, mha_bias, x_mask, t0_mlp, T, S
+        )
+
+        # block 06
+        x = auto_grad_checkpoint(self.spatial_blocks[6], x, t_mlp, mha_s06_k, mha_s06_v, mha_bias, x_mask, t0_mlp, T, S)
+        x = auto_grad_checkpoint(
+            self.temporal_blocks[6], x, t_mlp, mha_t06_k, mha_t06_v, mha_bias, x_mask, t0_mlp, T, S
+        )
+
+        # block 07
+        x = auto_grad_checkpoint(self.spatial_blocks[7], x, t_mlp, mha_s07_k, mha_s07_v, mha_bias, x_mask, t0_mlp, T, S)
+        x = auto_grad_checkpoint(
+            self.temporal_blocks[7], x, t_mlp, mha_t07_k, mha_t07_v, mha_bias, x_mask, t0_mlp, T, S
+        )
+
+        # block 08
+        x = auto_grad_checkpoint(self.spatial_blocks[8], x, t_mlp, mha_s08_k, mha_s08_v, mha_bias, x_mask, t0_mlp, T, S)
+        x = auto_grad_checkpoint(
+            self.temporal_blocks[8], x, t_mlp, mha_t08_k, mha_t08_v, mha_bias, x_mask, t0_mlp, T, S
+        )
+
+        # block 09
+        x = auto_grad_checkpoint(self.spatial_blocks[9], x, t_mlp, mha_s09_k, mha_s09_v, mha_bias, x_mask, t0_mlp, T, S)
+        x = auto_grad_checkpoint(
+            self.temporal_blocks[9], x, t_mlp, mha_t09_k, mha_t09_v, mha_bias, x_mask, t0_mlp, T, S
+        )
+
+        # block 10
+        x = auto_grad_checkpoint(
+            self.spatial_blocks[10], x, t_mlp, mha_s10_k, mha_s10_v, mha_bias, x_mask, t0_mlp, T, S
+        )
+        x = auto_grad_checkpoint(
+            self.temporal_blocks[10], x, t_mlp, mha_t10_k, mha_t10_v, mha_bias, x_mask, t0_mlp, T, S
+        )
+
+        # block 11
+        x = auto_grad_checkpoint(
+            self.spatial_blocks[11], x, t_mlp, mha_s11_k, mha_s11_v, mha_bias, x_mask, t0_mlp, T, S
+        )
+        x = auto_grad_checkpoint(
+            self.temporal_blocks[11], x, t_mlp, mha_t11_k, mha_t11_v, mha_bias, x_mask, t0_mlp, T, S
+        )
+
+        # block 12
+        x = auto_grad_checkpoint(
+            self.spatial_blocks[12], x, t_mlp, mha_s12_k, mha_s12_v, mha_bias, x_mask, t0_mlp, T, S
+        )
+        x = auto_grad_checkpoint(
+            self.temporal_blocks[12], x, t_mlp, mha_t12_k, mha_t12_v, mha_bias, x_mask, t0_mlp, T, S
+        )
+
+        # block 13
+        x = auto_grad_checkpoint(
+            self.spatial_blocks[13], x, t_mlp, mha_s13_k, mha_s13_v, mha_bias, x_mask, t0_mlp, T, S
+        )
+        x = auto_grad_checkpoint(
+            self.temporal_blocks[13], x, t_mlp, mha_t13_k, mha_t13_v, mha_bias, x_mask, t0_mlp, T, S
+        )
+
+        # block 14
+        x = auto_grad_checkpoint(
+            self.spatial_blocks[14], x, t_mlp, mha_s14_k, mha_s14_v, mha_bias, x_mask, t0_mlp, T, S
+        )
+        x = auto_grad_checkpoint(
+            self.temporal_blocks[14], x, t_mlp, mha_t14_k, mha_t14_v, mha_bias, x_mask, t0_mlp, T, S
+        )
+
+        # block 15
+        x = auto_grad_checkpoint(
+            self.spatial_blocks[15], x, t_mlp, mha_s15_k, mha_s15_v, mha_bias, x_mask, t0_mlp, T, S
+        )
+        x = auto_grad_checkpoint(
+            self.temporal_blocks[15], x, t_mlp, mha_t15_k, mha_t15_v, mha_bias, x_mask, t0_mlp, T, S
+        )
+
+        # block 16
+        x = auto_grad_checkpoint(
+            self.spatial_blocks[16], x, t_mlp, mha_s16_k, mha_s16_v, mha_bias, x_mask, t0_mlp, T, S
+        )
+        x = auto_grad_checkpoint(
+            self.temporal_blocks[16], x, t_mlp, mha_t16_k, mha_t16_v, mha_bias, x_mask, t0_mlp, T, S
+        )
+
+        # block 17
+        x = auto_grad_checkpoint(
+            self.spatial_blocks[17], x, t_mlp, mha_s17_k, mha_s17_v, mha_bias, x_mask, t0_mlp, T, S
+        )
+        x = auto_grad_checkpoint(
+            self.temporal_blocks[17], x, t_mlp, mha_t17_k, mha_t17_v, mha_bias, x_mask, t0_mlp, T, S
+        )
+
+        # block 18
+        x = auto_grad_checkpoint(
+            self.spatial_blocks[18], x, t_mlp, mha_s18_k, mha_s18_v, mha_bias, x_mask, t0_mlp, T, S
+        )
+        x = auto_grad_checkpoint(
+            self.temporal_blocks[18], x, t_mlp, mha_t18_k, mha_t18_v, mha_bias, x_mask, t0_mlp, T, S
+        )
+
+        # block 19
+        x = auto_grad_checkpoint(
+            self.spatial_blocks[19], x, t_mlp, mha_s19_k, mha_s19_v, mha_bias, x_mask, t0_mlp, T, S
+        )
+        x = auto_grad_checkpoint(
+            self.temporal_blocks[19], x, t_mlp, mha_t19_k, mha_t19_v, mha_bias, x_mask, t0_mlp, T, S
+        )
+
+        # block 20
+        x = auto_grad_checkpoint(
+            self.spatial_blocks[20], x, t_mlp, mha_s20_k, mha_s20_v, mha_bias, x_mask, t0_mlp, T, S
+        )
+        x = auto_grad_checkpoint(
+            self.temporal_blocks[20], x, t_mlp, mha_t20_k, mha_t20_v, mha_bias, x_mask, t0_mlp, T, S
+        )
+
+        # block 21
+        x = auto_grad_checkpoint(
+            self.spatial_blocks[21], x, t_mlp, mha_s21_k, mha_s21_v, mha_bias, x_mask, t0_mlp, T, S
+        )
+        x = auto_grad_checkpoint(
+            self.temporal_blocks[21], x, t_mlp, mha_t21_k, mha_t21_v, mha_bias, x_mask, t0_mlp, T, S
+        )
+
+        # block 22
+        x = auto_grad_checkpoint(
+            self.spatial_blocks[22], x, t_mlp, mha_s22_k, mha_s22_v, mha_bias, x_mask, t0_mlp, T, S
+        )
+        x = auto_grad_checkpoint(
+            self.temporal_blocks[22], x, t_mlp, mha_t22_k, mha_t22_v, mha_bias, x_mask, t0_mlp, T, S
+        )
+
+        # block 23
+        x = auto_grad_checkpoint(
+            self.spatial_blocks[23], x, t_mlp, mha_s23_k, mha_s23_v, mha_bias, x_mask, t0_mlp, T, S
+        )
+        x = auto_grad_checkpoint(
+            self.temporal_blocks[23], x, t_mlp, mha_t23_k, mha_t23_v, mha_bias, x_mask, t0_mlp, T, S
+        )
+
+        # block 24
+        x = auto_grad_checkpoint(
+            self.spatial_blocks[24], x, t_mlp, mha_s24_k, mha_s24_v, mha_bias, x_mask, t0_mlp, T, S
+        )
+        x = auto_grad_checkpoint(
+            self.temporal_blocks[24], x, t_mlp, mha_t24_k, mha_t24_v, mha_bias, x_mask, t0_mlp, T, S
+        )
+
+        # block 25
+        x = auto_grad_checkpoint(
+            self.spatial_blocks[25], x, t_mlp, mha_s25_k, mha_s25_v, mha_bias, x_mask, t0_mlp, T, S
+        )
+        x = auto_grad_checkpoint(
+            self.temporal_blocks[25], x, t_mlp, mha_t25_k, mha_t25_v, mha_bias, x_mask, t0_mlp, T, S
+        )
+
+        # block 26
+        x = auto_grad_checkpoint(
+            self.spatial_blocks[26], x, t_mlp, mha_s26_k, mha_s26_v, mha_bias, x_mask, t0_mlp, T, S
+        )
+        x = auto_grad_checkpoint(
+            self.temporal_blocks[26], x, t_mlp, mha_t26_k, mha_t26_v, mha_bias, x_mask, t0_mlp, T, S
+        )
+
+        # block 27
+        x = auto_grad_checkpoint(
+            self.spatial_blocks[27], x, t_mlp, mha_s27_k, mha_s27_v, mha_bias, x_mask, t0_mlp, T, S
+        )
+        x = auto_grad_checkpoint(
+            self.temporal_blocks[27], x, t_mlp, mha_t27_k, mha_t27_v, mha_bias, x_mask, t0_mlp, T, S
+        )
+
+        # NOTE: old code
+        # for i, (spatial_block, temporal_block) in enumerate(zip(self.spatial_blocks, self.temporal_blocks)):
+        #     x = auto_grad_checkpoint(
+        #         spatial_block,
+        #         x,
+        #         t_mlp,
+        #         locals()[f"mha_s{i:02}_k"],
+        #         locals()[f"mha_s{i:02}_v"],
+        #         mha_bias,
+        #         x_mask,
+        #         t0_mlp,
+        #         T,
+        #         S,
+        #     )
+        #     x = auto_grad_checkpoint(
+        #         temporal_block,
+        #         x,
+        #         t_mlp,
+        #         locals()[f"mha_t{i:02}_k"],
+        #         locals()[f"mha_t{i:02}_v"],
+        #         mha_bias,
+        #         x_mask,
+        #         t0_mlp,
+        #         T,
+        #         S,
+        #     )
 
         if self.enable_sequence_parallelism:
             x = rearrange(x, "B (T S) C -> B T S C", T=T, S=S)

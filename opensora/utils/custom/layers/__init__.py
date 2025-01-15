@@ -7,6 +7,8 @@ from loguru import logger
 from opensora.utils.custom.compile import get_custom_backend
 from opensora.utils.custom.mlflow import MLFlowManager
 
+from .rotary_embedding import RotaryEmbedding
+
 
 def replace_with_custom_layers(module: nn.Module) -> nn.Module:
     """Replace all module layers with custom layers if custom_backend is not None."""
