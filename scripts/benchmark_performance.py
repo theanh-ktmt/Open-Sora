@@ -434,7 +434,7 @@ def main():
             start_idx += len(batch_prompts)
 
         # Done a combination (Remove first sample for warmup)
-        logger.info("End-to-End latencies: {}".format(end2end_latency))
+        logger.info("End-to-End latencies: {}".format(end2end_latencies))
         logger.info("Backbone latency: {}".format(backbone_latencies))
         logger.info("Text Encoder latency: {}".format(text_encoder_latencies))
         logger.info("Image Encoder latency: {}".format(image_encoder_latencies))
