@@ -71,9 +71,9 @@ def compile_module(
 
     # prepare configs
     DEFAULT_CONFIGS = {
+        "fullgraph": True,
         "mode": "default",
         # "mode": "max-autotune",   # not working
-        # "fullgraph": True,        # not working
     }
     configs = DEFAULT_CONFIGS if configs is None else configs
     MLFlowManager.log_params({f"compile_{k}": v for k, v in configs.items()})
