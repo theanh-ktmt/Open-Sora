@@ -4,7 +4,7 @@ This equals to hook before compiled."""
 import torch.nn as nn
 from loguru import logger
 
-from opensora.utils.custom.compile import get_custom_backend
+from opensora.utils.custom.config import ConfigurationManager
 from opensora.utils.custom.mlflow import MLFlowManager
 
 from .rotary_embedding import RotaryEmbedding
@@ -12,7 +12,7 @@ from .rotary_embedding import RotaryEmbedding
 
 def replace_with_custom_layers(module: nn.Module) -> nn.Module:
     """Replace all module layers with custom layers if custom_backend is not None."""
-    custom_backend = get_custom_backend()
+    custom_backend = ConfigurationManager.get("CUSTOM_BACKEND")
 
     if custom_backend is None or not isinstance(module, nn.Module):
         logger.info("Customed backend is None or module is not nn.Module. Keep the origin module.")

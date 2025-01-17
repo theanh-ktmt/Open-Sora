@@ -1,7 +1,6 @@
 import json
 import pprint
 import time
-import warnings
 from datetime import datetime
 from itertools import product
 from pathlib import Path
@@ -21,10 +20,10 @@ from opensora.datasets.aspect import get_image_size, get_num_frames
 from opensora.models.text_encoder.t5 import text_preprocessing
 from opensora.registry import MODELS, SCHEDULERS, build_module
 from opensora.utils.config_utils import parse_configs
-from opensora.utils.custom.compile import compile_module, is_torch_compile_enabled
+from opensora.utils.custom.compile import compile_module
+from opensora.utils.custom.config import ConfigurationManager
 from opensora.utils.custom.layers import replace_with_custom_layers
 from opensora.utils.custom.mlflow import MLFlowManager
-from opensora.utils.custom.tensorrt import is_tensorrt_enabled
 from opensora.utils.custom.y_embedder import get_y_embedder, load_y_embedder
 from opensora.utils.inference_utils import (
     add_watermark,
@@ -45,38 +44,13 @@ from opensora.utils.inference_utils import (
 )
 from opensora.utils.misc import create_logger, is_distributed, is_main_process, to_torch_dtype
 
-VIDEO_GENERATION_PROMPTS = [
-    "A day in the life of a busy city street from dawn to dusk.",
-    "A timelapse of a flower blooming in a garden.",
-    "An animation of a spaceship traveling through a colorful galaxy.",
-    "A scenic drone flyover of a mountain range during sunset.",
-    "A futuristic cityscape with flying cars and holographic advertisements.",
-    "A short story about a robot exploring an abandoned warehouse.",
-    "A fantasy world where dragons soar over castles and forests.",
-    "A cooking tutorial showing how to make a delicious dessert step-by-step.",
-    "A virtual tour of a famous historical landmark.",
-    "A wildlife documentary featuring animals in their natural habitats.",
-]
-
-N_PROMPTS = 5
-VIDEO_GENERATION_PROMPTS = VIDEO_GENERATION_PROMPTS[:N_PROMPTS]
-
-VIDEO_REFERENCES = ["save/references/sample.jpg"] * len(VIDEO_GENERATION_PROMPTS)
-VIDEO_RESOLUTIONS = [
-    # "144p",
-    # "240p",
-    # "360p",
-    # "480p",
-    "720p",
-]
-VIDEO_LENGTHS = [
-    # "2s",
-    "4s",
-    # "8s",
-    # "16s",
-]
-ASPECT_RATIO = "9:16"
-BATCH_SIZE = 1
+# read benchmark config
+VIDEO_GENERATION_PROMPTS = ConfigurationManager.get("BENCHMARK").get("prompts")
+VIDEO_REFERENCES = ConfigurationManager.get("BENCHMARK").get("references")
+VIDEO_RESOLUTIONS = ConfigurationManager.get("BENCHMARK").get("resolutions")
+VIDEO_LENGTHS = ConfigurationManager.get("BENCHMARK").get("lengths")
+ASPECT_RATIO = ConfigurationManager.get("BENCHMARK").get("aspect_ratio")
+BATCH_SIZE = ConfigurationManager.get("BENCHMARK").get("batch_size")
 
 
 def main():
@@ -176,7 +150,7 @@ def main():
         input_size = (num_frames, *image_size)
         latent_size = vae.get_latent_size(input_size)
 
-        if is_tensorrt_enabled():
+        if ConfigurationManager.get("ENABLE_TENSORRT"):
             MLFlowManager.set_tag("tensorrt")
             from opensora.models.stdit.stdit3_tensorrt import STDiT3TRT
 
@@ -211,12 +185,8 @@ def main():
         # replace module layers with customed layers
         model = replace_with_custom_layers(model)
 
-        if is_torch_compile_enabled():
-            MLFlowManager.set_tag("torch.compile")
-            if is_tensorrt_enabled():
-                warnings.warn("TensorRT and torch.compile are not working along! Shutting down.")
-                exit(0)
-            model = compile_module(model)
+        # compile model with torch.compile
+        model = compile_module(model)
 
         # == build scheduler ==
         scheduler = build_module(cfg.scheduler, SCHEDULERS)

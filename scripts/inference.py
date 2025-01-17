@@ -1,6 +1,5 @@
 import os
 import time
-import warnings
 from pprint import pformat
 
 import colossalai
@@ -17,11 +16,11 @@ from opensora.datasets.aspect import get_image_size, get_num_frames
 from opensora.models.text_encoder.t5 import text_preprocessing
 from opensora.registry import MODELS, SCHEDULERS, build_module
 from opensora.utils.config_utils import parse_configs
-from opensora.utils.custom.compile import compile_module, is_torch_compile_enabled
+from opensora.utils.custom.compile import compile_module
+from opensora.utils.custom.config import ConfigurationManager
 from opensora.utils.custom.layers import replace_with_custom_layers
 from opensora.utils.custom.mlflow import MLFlowManager
-from opensora.utils.custom.profile import get_profiling_status, is_profiling_sample
-from opensora.utils.custom.tensorrt import is_tensorrt_enabled
+from opensora.utils.custom.profile import is_profiling_sample
 from opensora.utils.custom.y_embedder import get_y_embedder, load_y_embedder
 from opensora.utils.inference_utils import (
     add_watermark,
@@ -78,7 +77,10 @@ def main():
     progress_wrap = tqdm if verbose == 1 else (lambda x: x)
 
     # init mlflow logging
-    is_profiling, target_sample, profile_dir = get_profiling_status()
+    is_profiling = ConfigurationManager.get("ENABLE_PROFILER")
+    target_sample = ConfigurationManager.get("TARGET_SAMPLE")
+    profile_dir = ConfigurationManager.get("PROFILE_OUTDIR")
+
     mlflow_manager = MLFlowManager("Profiling Exps" if is_profiling else "Inference Exps")
     mlflow_manager.start_run(cfg)
     logger.info("Initialized MLFlow logging.")
@@ -108,7 +110,7 @@ def main():
     input_size = (num_frames, *image_size)
     latent_size = vae.get_latent_size(input_size)
 
-    if is_tensorrt_enabled():
+    if ConfigurationManager.get("ENABLE_TENSORRT"):
         MLFlowManager.set_tag("tensorrt")
         from opensora.models.stdit.stdit3_tensorrt import STDiT3TRT
 
@@ -142,12 +144,8 @@ def main():
     # replace module layers with customed layers
     model = replace_with_custom_layers(model)
 
-    if is_torch_compile_enabled():
-        MLFlowManager.set_tag("torch.compile")
-        if is_tensorrt_enabled():
-            warnings.warn("TensorRT and torch.compile are not working along! Shutting down.")
-            exit(0)
-        model = compile_module(model)
+    # compile model with torch.compile
+    model = compile_module(model)
 
     # == build scheduler ==
     scheduler = build_module(cfg.scheduler, SCHEDULERS)

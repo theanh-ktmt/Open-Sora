@@ -1,27 +1,9 @@
-import os
-from typing import Any, Dict, Optional
-
 import torch
 import torch.nn as nn
 from loguru import logger
 
+from opensora.utils.custom.config import ConfigurationManager
 from opensora.utils.custom.mlflow import MLFlowManager
-
-ENABLE_TORCHCOMPILE = os.environ.get("ENABLE_TORCHCOMPILE", "0") == "1"
-CUSTOM_BACKEND = os.environ.get("CUSTOM_BACKEND", None)
-
-logger.info("Enable torch.compile: {}".format(ENABLE_TORCHCOMPILE))
-logger.info("Customed backend: {}".format(CUSTOM_BACKEND))
-
-
-def is_torch_compile_enabled() -> bool:
-    """Check if torch.compile is enabled or not."""
-    return ENABLE_TORCHCOMPILE
-
-
-def get_custom_backend() -> str:
-    """Get customed backend used for our customed ops."""
-    return CUSTOM_BACKEND
 
 
 def hook_after_compiled():
@@ -31,7 +13,8 @@ def hook_after_compiled():
     assert extern_kernels.mm is torch.mm
     assert extern_kernels.addmm is torch.addmm
 
-    if CUSTOM_BACKEND is None:
+    custom_backend = ConfigurationManager.get("CUSTOM_BACKEND")
+    if custom_backend is None:
 
         def custom_func(fn):
             def wrapper(*args, **kwargs):
@@ -49,35 +32,35 @@ def hook_after_compiled():
         extern_kernels.mm = custom_func(extern_kernels.mm)
         logger.info("Skipped hooking after compiled because no backend provided.")
 
-    elif CUSTOM_BACKEND == "hipblaslt":
+    elif custom_backend == "hipblaslt":
         from modiffusion.ops.hipblaslt_gemm import hipblaslt_addmm_out, hipblaslt_mm_out
 
-        MLFlowManager.set_tag("hook_after", CUSTOM_BACKEND)
+        MLFlowManager.set_tag("hook_after", custom_backend)
         extern_kernels.addmm = hipblaslt_addmm_out
         extern_kernels.mm = hipblaslt_mm_out
-        logger.info("Done hooked after compile for backend '{}'.".format(CUSTOM_BACKEND))
+        logger.info("Done hooked after compile for backend '{}'.".format(custom_backend))
     else:
         raise NotImplementedError(
-            "Backend '{}' is currently not supported for hooking after 'torch.compile'!".format(CUSTOM_BACKEND)
+            "Backend '{}' is currently not supported for hooking after 'torch.compile'!".format(custom_backend)
         )
 
 
-def compile_module(
-    module: nn.Module, configs: Optional[Dict[str, Any]] = None, cache_path: str = "save/cache/model.compiled.pth"
-):
+def compile_module(module: nn.Module):
     """Implement torch.compile for an nn.Module."""
-    # hook custom kernels to after 'torch.compile'
-    hook_after_compiled()
+    if ConfigurationManager.get("ENABLE_TORCHCOMPILE"):
+        logger.info("Start compiling...")
+        MLFlowManager.set_tag("torch.compile")
 
-    # prepare configs
-    DEFAULT_CONFIGS = {
-        "fullgraph": True,
-        "mode": "default",
-        # "mode": "max-autotune",   # not working
-    }
-    configs = DEFAULT_CONFIGS if configs is None else configs
-    MLFlowManager.log_params({f"compile_{k}": v for k, v in configs.items()})
+        # hook custom kernels to after 'torch.compile'
+        hook_after_compiled()
 
-    # start compile
-    logger.info("Start compiling...")
-    return torch.compile(module, **configs)
+        # prepare configs
+        configs = ConfigurationManager.get("TORCHCOMPILE_CONFIG")
+        MLFlowManager.log_params({f"compile_{k}": v for k, v in configs.items()})
+
+        # start compile
+        logger.info("Start compiling...")
+        return torch.compile(module, **configs)
+    else:
+        logger.info("Skip compiling...")
+        return module

@@ -19,24 +19,16 @@ import torch.distributed as dist
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.utils.checkpoint
+import xformers
 from einops import rearrange
 from timm.models.vision_transformer import Mlp
 
 from opensora.acceleration.communications import all_to_all, split_forward_gather_backward
 from opensora.acceleration.parallel_states import get_sequence_parallel_group
+from opensora.utils.custom.config import ConfigurationManager
 from opensora.utils.custom.mlflow import MLFlowManager
-from opensora.utils.custom.operators import padded_xformers_attn, triton_flash_attn_bhsd
-from opensora.utils.custom.operators.xformers import (
-    block_diagonal_mask,
-    is_xformers_enabled,
-    memory_efficient_attention,
-)
-
-# Import xformers optional
-enable_xformers = is_xformers_enabled()
-if enable_xformers:
-    import xformers.ops
-
+from opensora.utils.custom.operators import padded_xformers_attn, triton_flash_attn_bhsd, triton_flash_attn_bshd
+from opensora.utils.custom.operators.xformers import memory_efficient_attention
 
 approx_gelu = lambda: nn.GELU(approximate="tanh")
 
@@ -200,49 +192,64 @@ class Attention(nn.Module):
                 k = self.rotary_emb(k)
 
         if enable_flash_attn:
-            MLFlowManager.set_tag("self_attn.spatial_blocks", "flash_attn")
-            from flash_attn import flash_attn_func
+            spatial_impl = ConfigurationManager.get("ATTN_IMPLS").get("self_attn.spatial_blocks", "flash_attn")
+            if spatial_impl == "flash_attn":
+                MLFlowManager.set_tag("self_attn.spatial_blocks", "flash_attn")
+                from flash_attn import flash_attn_func
 
-            # (B, #heads, N, #dim) -> (B, N, #heads, #dim)
-            q = q.permute(0, 2, 1, 3)
-            k = k.permute(0, 2, 1, 3)
-            v = v.permute(0, 2, 1, 3)
-            x = flash_attn_func(
-                q,
-                k,
-                v,
-                dropout_p=self.attn_drop.p if self.training else 0.0,
-                softmax_scale=self.scale,
-                causal=self.is_causal,
-            )
+                # (B, #heads, N, #dim) -> (B, N, #heads, #dim)
+                q = q.permute(0, 2, 1, 3)
+                k = k.permute(0, 2, 1, 3)
+                v = v.permute(0, 2, 1, 3)
+                x = flash_attn_func(
+                    q,
+                    k,
+                    v,
+                    dropout_p=self.attn_drop.p if self.training else 0.0,
+                    softmax_scale=self.scale,
+                    causal=self.is_causal,
+                )
+            else:
+                raise NotImplementedError(
+                    "Attn impl '{}' is currently not supported for 'self_attn.spatial_blocks'.".format()
+                )
         else:
-            # old torch-impl attn
-            # MLFlowManager.set_tag("self_attn.temporal_blocks", "torch_impl_attn")
-            # dtype = q.dtype
-            # q = q * self.scale
-            # attn = q @ k.transpose(-2, -1)  # translate attn to float32
-            # attn = attn.to(torch.float32)
-            # if self.is_causal:
-            #     causal_mask = torch.tril(torch.ones_like(attn), diagonal=0)
-            #     causal_mask = torch.where(causal_mask.bool(), 0, float("-inf"))
-            #     attn += causal_mask
-            # attn = attn.softmax(dim=-1)
-            # attn = attn.to(dtype)  # cast back attn to original dtype
-            # attn = self.attn_drop(attn)
-            # x = attn @ v
-            # x = x.transpose(1, 2)  # transpose to 'bshd'
+            temporal_impl = ConfigurationManager.get("ATTN_IMPLS").get("self_attn.temporal_blocks", "torch_impl_attn")
+            if temporal_impl == "torch_impl_attn":
+                # old torch-impl attn
+                MLFlowManager.set_tag("self_attn.temporal_blocks", "torch_impl_attn")
+                dtype = q.dtype
+                q = q * self.scale
+                attn = q @ k.transpose(-2, -1)  # translate attn to float32
+                attn = attn.to(torch.float32)
+                if self.is_causal:
+                    causal_mask = torch.tril(torch.ones_like(attn), diagonal=0)
+                    causal_mask = torch.where(causal_mask.bool(), 0, float("-inf"))
+                    attn += causal_mask
+                attn = attn.softmax(dim=-1)
+                attn = attn.to(dtype)  # cast back attn to original dtype
+                attn = self.attn_drop(attn)
+                x = attn @ v
+                x = x.transpose(1, 2)  # transpose to 'bshd'
 
-            # triton-bhsd
-            MLFlowManager.set_tag("self_attn.temporal_blocks", "triton_bhsd_attn")
-            x = triton_flash_attn_bhsd(q, k, v)
-            x = x.transpose(1, 2)  # transpose to 'bshd'
+            elif temporal_impl == "triton_bhsd_attn":
+                # triton-bhsd
+                MLFlowManager.set_tag("self_attn.temporal_blocks", "triton_bhsd_attn")
+                x = triton_flash_attn_bhsd(q, k, v)
+                x = x.transpose(1, 2)  # transpose to 'bshd'
 
-            # triton-bshd
-            # MLFlowManager.set_tag("self_attn.temporal_blocks", "triton_bshd_attn")
-            # q = q.transpose(1, 2)
-            # k = k.transpose(1, 2)
-            # v = v.transpose(1, 2)
-            # x = triton_flash_attn_bshd(q, k, v)
+            elif temporal_impl == "triton_bshd_attn":
+                # triton-bshd
+                MLFlowManager.set_tag("self_attn.temporal_blocks", "triton_bshd_attn")
+                q = q.transpose(1, 2)
+                k = k.transpose(1, 2)
+                v = v.transpose(1, 2)
+                x = triton_flash_attn_bshd(q, k, v)
+
+            else:
+                raise NotImplementedError(
+                    "Attn impl '{}' is currently not supported for 'self_attn.temporal_blocks'.".format()
+                )
 
         x_output_shape = (B, N, C)
         x = x.reshape(x_output_shape)
@@ -356,10 +363,7 @@ class KVCompressAttention(nn.Module):
             if mask is not None:
                 attn_bias = torch.zeros([B * self.num_heads, q.shape[1], k.shape[1]], dtype=q.dtype, device=q.device)
                 attn_bias.masked_fill_(mask.squeeze(1).repeat(self.num_heads, 1, 1) == 0, float("-inf"))
-            if enable_xformers:
-                x = xformers.ops.memory_efficient_attention(q, k, v, p=self.attn_drop.p, attn_bias=attn_bias)
-            else:
-                x = memory_efficient_attention(q, k, v, p=self.attn_drop.p, attn_bias=attn_bias)
+            x = xformers.ops.memory_efficient_attention(q, k, v, p=self.attn_drop.p, attn_bias=attn_bias)
         else:
             # (B, N, #heads, #dim) -> (B, #heads, N, #dim)
             q = q.permute(0, 2, 1, 3)
@@ -504,33 +508,39 @@ class MultiHeadCrossAttention(nn.Module):
         # k, v = kv.unbind(2)
 
         ### Calculate cross attn ###
+        mha_impl = ConfigurationManager.get("ATTN_IMPLS").get("multihead_attn", "xformers_default_attn")
+        if mha_impl == "torch_impl_attn":
+            MLFlowManager.set_tag("multihead_attn", "torch_impl_attn")
+            x = memory_efficient_attention(q, k, v, p=self.attn_drop.p, attn_bias=attn_bias)
+            x = x.reshape(B, -1, C)
 
-        # xformers default impls
-        # if enable_xformers:
-        #     MLFlowManager.set_tag("multihead_attn", "xformers_default_attn")
-        #     attn_bias = attn_bias.broadcast_to(1, 16, 216000, 600)
-        #     x = xformers.ops.memory_efficient_attention(q, k, v, p=self.attn_drop.p, attn_bias=attn_bias)
-        #     x = x.view(B, -1, C)
-        # else:
-        #     MLFlowManager.set_tag("multihead_attn", "torch_impl_attn")
-        #     x = memory_efficient_attention(q, k, v, p=self.attn_drop.p, attn_bias=attn_bias)
-        #     x = x.reshape(B, -1, C)
+        elif mha_impl == "xformers_default_attn":
+            # xformers default impls
+            MLFlowManager.set_tag("multihead_attn", "xformers_default_attn")
+            attn_bias = attn_bias.broadcast_to(1, 16, 216000, 600)
+            x = xformers.ops.memory_efficient_attention(q, k, v, p=self.attn_drop.p, attn_bias=attn_bias)
+            x = x.view(B, -1, C)
 
-        # pytorch default impls
-        # MLFlowManager.set_tag("multihead_attn", "torch_default_attn")
-        # attn_bias = attn_bias.broadcast_to(1, 16, 216000, 600)
-        # q = q.transpose(1, 2) # transpose to 'bhsd' layout
-        # k = k.transpose(1, 2) # transpose to 'bhsd' layout
-        # v = v.transpose(1, 2) # transpose to 'bhsd' layout
-        # x = F.scaled_dot_product_attention(q, k, v, attn_mask=attn_bias)
-        # x = x.transpose(1, 2) # transpose to 'bshd' layout
-        # x = x.reshape(B, -1, C)
+        elif mha_impl == "torch_default_attn":
+            # pytorch default impls
+            MLFlowManager.set_tag("multihead_attn", "torch_default_attn")
+            attn_bias = attn_bias.broadcast_to(1, 16, 216000, 600)
+            q = q.transpose(1, 2)  # transpose to 'bhsd' layout
+            k = k.transpose(1, 2)  # transpose to 'bhsd' layout
+            v = v.transpose(1, 2)  # transpose to 'bhsd' layout
+            x = F.scaled_dot_product_attention(q, k, v, attn_mask=attn_bias)
+            x = x.transpose(1, 2)  # transpose to 'bshd' layout
+            x = x.reshape(B, -1, C)
 
-        # padded xformers default
-        MLFlowManager.set_tag("multihead_attn", "padded_xformers_default_attn")
-        attn_bias = attn_bias.broadcast_to(1, 16, 216000, 600)
-        x = padded_xformers_attn(q, k, v, attn_bias=attn_bias)
-        x = x.reshape(B, -1, C)
+        elif mha_impl == "padded_xformers_default_attn":
+            # padded xformers default
+            MLFlowManager.set_tag("multihead_attn", "padded_xformers_default_attn")
+            attn_bias = attn_bias.broadcast_to(1, 16, 216000, 600)
+            x = padded_xformers_attn(q, k, v, attn_bias=attn_bias)
+            x = x.reshape(B, -1, C)
+
+        else:
+            raise NotImplementedError("Attn impl '{}' is currently not supported for 'multihead_attn'.".format())
 
         # normal tensor is not contiguous for view function
         x = self.proj(x)
@@ -577,22 +587,11 @@ class SeqParallelMultiHeadCrossAttention(MultiHeadCrossAttention):
         # compute attention
         attn_bias = None
         if mask is not None:
-            if enable_xformers:
-                attn_bias = xformers.ops.fmha.attn_bias.BlockDiagonalMask.from_seqlens([N] * B, mask)
-            else:
-                attn_bias = block_diagonal_mask([N] * B, mask, dtype=q.dtype, device=q.device)
-
-        if enable_xformers:
-            x = xformers.ops.memory_efficient_attention(q, k, v, p=self.attn_drop.p, attn_bias=attn_bias)
-        else:
-            x = memory_efficient_attention(q, k, v, p=self.attn_drop.p, attn_bias=attn_bias)
+            attn_bias = xformers.ops.fmha.attn_bias.BlockDiagonalMask.from_seqlens([N] * B, mask)
+        x = xformers.ops.memory_efficient_attention(q, k, v, p=self.attn_drop.p, attn_bias=attn_bias)
 
         # apply all to all to gather back attention heads and scatter sequence
-        x = (
-            x.view(B, -1, self.num_heads // sp_size, self.head_dim)
-            if enable_xformers
-            else x.reshape(B, -1, self.num_heads // sp_size, self.head_dim)
-        )
+        x = x.view(B, -1, self.num_heads // sp_size, self.head_dim)
         x = all_to_all(x, sp_group, scatter_dim=1, gather_dim=2)
 
         # apply output projection

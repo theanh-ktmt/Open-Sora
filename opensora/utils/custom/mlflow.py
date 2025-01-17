@@ -6,12 +6,12 @@ from typing import Any, Dict, Optional, Union
 import mlflow
 from loguru import logger
 
-ENABLE_MLFLOW = os.environ.get("ENABLE_MLFLOW", "0") == "1"
-logger.info("Enable MLFLow Logging: {}".format(ENABLE_MLFLOW))
+from opensora.utils.custom.config import ConfigurationManager
 
 
 class MLFlowManager:
     __instance = None
+    __active = ConfigurationManager.get("ENABLE_MLFLOW")
 
     def __new__(cls, *args, **kwargs):
         if cls.__instance is None:
@@ -25,11 +25,11 @@ class MLFlowManager:
 
     def setup_experiment(self) -> None:
         """Setup experiment information. Setup tracking URI and creating experiment."""
-        if not ENABLE_MLFLOW:
+        if not self.__active:
             return
 
         # set mlflow tracking URI
-        mlflow_tracking_uri = os.getenv("MLFLOW_TRACKING_URI", None)
+        mlflow_tracking_uri = ConfigurationManager.get("MLFLOW_TRACKING_URI")
         if mlflow_tracking_uri:
             mlflow.set_tracking_uri(uri=mlflow_tracking_uri)
 
@@ -44,7 +44,7 @@ class MLFlowManager:
 
     def start_run(self, config: Optional[Dict[str, Any]]) -> None:
         """Start a new run."""
-        if not ENABLE_MLFLOW:
+        if not self.__active:
             return
 
         # setup experiment
@@ -58,6 +58,9 @@ class MLFlowManager:
         # Log config
         mlflow.log_dict(config, "config/config.yaml")
 
+        # Log settings
+        mlflow.log_dict(ConfigurationManager.CONFIGS, "config/settings.json")
+
         # Log env vars
         mlflow.log_dict(dict(os.environ), "config/env_vars.json")
 
@@ -69,42 +72,42 @@ class MLFlowManager:
 
     def end_run(self) -> None:
         """End current run."""
-        if not ENABLE_MLFLOW:
+        if not self.__active:
             return
         mlflow.end_run()
 
-    @staticmethod
-    def set_tag(tag: str, value: Optional[str] = None) -> None:
-        if not ENABLE_MLFLOW:
+    @classmethod
+    def set_tag(cls, tag: str, value: Optional[str] = None) -> None:
+        if not cls.__active:
             return
         if value:
             mlflow.set_tag(tag, value)
         else:
             mlflow.set_tag(tag, "True")
 
-    @staticmethod
-    def log_params(params: Dict[str, Any]) -> None:
-        if not ENABLE_MLFLOW:
+    @classmethod
+    def log_params(cls, params: Dict[str, Any]) -> None:
+        if not cls.__active:
             return
         mlflow.log_params(params)
 
-    @staticmethod
-    def log_metric(key: str, value: float, step: int = 0) -> None:
-        if not ENABLE_MLFLOW:
+    @classmethod
+    def log_metric(cls, key: str, value: float, step: int = 0) -> None:
+        if not cls.__active:
             return
         mlflow.log_metric(key, value, step)
 
-    @staticmethod
-    def log_metrics(metrics: Dict[str, Any], step: int = 0) -> None:
-        if not ENABLE_MLFLOW:
+    @classmethod
+    def log_metrics(cls, metrics: Dict[str, Any], step: int = 0) -> None:
+        if not cls.__active:
             return
 
         for key, value in metrics.items():
             mlflow.log_metric(key, value, step)
 
-    @staticmethod
-    def log_artifact(path: str, dest_dir: str) -> None:
-        if not ENABLE_MLFLOW:
+    @classmethod
+    def log_artifact(cls, path: str, dest_dir: str) -> None:
+        if not cls.__active:
             return
 
         if os.path.isdir(path):
@@ -114,9 +117,9 @@ class MLFlowManager:
         else:
             raise NotImplementedError("Path {} is neither file nor directory.".format(path))
 
-    @staticmethod
-    def log_file(input: Union[str, dict], filepath: str) -> None:
-        if not ENABLE_MLFLOW:
+    @classmethod
+    def log_file(cls, input: Union[str, dict], filepath: str) -> None:
+        if not cls.__active:
             return
 
         if isinstance(input, str):

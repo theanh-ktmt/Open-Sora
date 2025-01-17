@@ -10,7 +10,8 @@ from torch.profiler import ProfilerActivity, profile
 
 from opensora.datasets import IMG_FPS
 from opensora.datasets.utils import read_from_path
-from opensora.utils.custom.profile import get_profiling_status, trace_handler_wrapper
+from opensora.utils.custom.config import ConfigurationManager
+from opensora.utils.custom.profile import trace_handler_wrapper
 from opensora.utils.misc import create_logger
 
 logger = create_logger()
@@ -99,7 +100,7 @@ def collect_references_batch(
 ):
     refs_x = []  # refs_x: [batch, ref_num, C, T, H, W]
     latencies = []
-    is_profiling, _, _ = get_profiling_status()
+    is_profiling = ConfigurationManager.get("ENABLE_PROFILER")
 
     for reference_path in reference_paths:
         if reference_path == "":

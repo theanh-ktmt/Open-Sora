@@ -3,11 +3,11 @@ import torch.nn as nn
 from loguru import logger
 from tqdm import tqdm
 
+from opensora.utils.custom.config import ConfigurationManager
 from opensora.utils.custom.layers.linear import CustomHipblasltLinear
-from opensora.utils.custom.profile import get_profiling_status
 
 torch.manual_seed(2024)
-_, _, profile_outdir = get_profiling_status()
+profile_dir = ConfigurationManager.get("PROFILE_OUTDIR")
 
 n_runs = 1000
 warm_ups = 100

@@ -1,24 +1,8 @@
 import math
-import os
 from typing import List, Optional
 
 import torch
 import torch.nn.functional as F
-from loguru import logger
-
-ENABLE_XFORMERS: Optional[bool] = None
-
-
-def is_xformers_enabled() -> bool:
-    """Check if xformers is enabled or not."""
-    global ENABLE_XFORMERS
-    if ENABLE_XFORMERS is not None:
-        return ENABLE_XFORMERS
-
-    ENABLE_XFORMERS = os.environ.get("ENABLE_XFORMERS", "1") == "1"
-    logger.info("Enable xformers: {}".format(ENABLE_XFORMERS))
-
-    return ENABLE_XFORMERS
 
 
 def memory_efficient_attention(
