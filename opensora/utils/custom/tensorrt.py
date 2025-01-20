@@ -56,6 +56,11 @@ def build_engine(
             logger.info("- Workspace size = {}GB".format(workspace_size))
             config.set_memory_pool_limit(trt.MemoryPoolType.WORKSPACE, workspace_size * (1024 * 1024 * 1024))
 
+        # Set optimization level to 3 (as default)
+        # Optimization levels increase from 0 (worst) -> 5 (best)
+        config.builder_optimization_level = 3
+        logger.info("Optimization Level = {}".format(config.builder_optimization_level))
+
         # Enable FP16 if specified
         if len(fp16_layers) > 0:
             logger.info("- Enable FP16".format(workspace_size))

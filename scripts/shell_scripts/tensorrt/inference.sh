@@ -1,9 +1,9 @@
 #!/bin/bash
 ENABLE_TENSORRT=1 CUDA_VISIBLE_DEVICES=5 \
-python3 scripts/inference.py configs/anhtt/inference.py \
+python3 scripts/inference.py configs/opensora-v1-2/inference/sample.py \
   --num-frames "4s" --resolution "720p" \
   --num-sampling-steps 30 --dtype "fp32" \
   --prompt "a beautiful vocanic mountain" \
   --reference-path "save/references/sample.jpg" \
   --flash-attn "false" --layernorm-kernel "false" \
-  --trt-engine-path "save/tensorrt/720p-4s/stdit3_fp32_mp.engine"
+  --trt-engine-path "save/tensorrt/720p-4s/stdit3_fp32_mp_o0.engine"

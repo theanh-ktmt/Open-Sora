@@ -27,8 +27,6 @@ from opensora.acceleration.communications import all_to_all, split_forward_gathe
 from opensora.acceleration.parallel_states import get_sequence_parallel_group
 from opensora.utils.custom.config import ConfigurationManager
 from opensora.utils.custom.mlflow import MLFlowManager
-from opensora.utils.custom.operators import padded_xformers_attn, triton_flash_attn_bhsd, triton_flash_attn_bshd
-from opensora.utils.custom.operators.xformers import memory_efficient_attention
 
 approx_gelu = lambda: nn.GELU(approximate="tanh")
 
@@ -234,12 +232,16 @@ class Attention(nn.Module):
 
             elif temporal_impl == "triton_bhsd_attn":
                 # triton-bhsd
+                from opensora.utils.custom.operators import triton_flash_attn_bhsd
+
                 MLFlowManager.set_tag("self_attn.temporal_blocks", "triton_bhsd_attn")
                 x = triton_flash_attn_bhsd(q, k, v)
                 x = x.transpose(1, 2)  # transpose to 'bshd'
 
             elif temporal_impl == "triton_bshd_attn":
                 # triton-bshd
+                from opensora.utils.custom.operators import triton_flash_attn_bshd
+
                 MLFlowManager.set_tag("self_attn.temporal_blocks", "triton_bshd_attn")
                 q = q.transpose(1, 2)
                 k = k.transpose(1, 2)
@@ -510,6 +512,8 @@ class MultiHeadCrossAttention(nn.Module):
         ### Calculate cross attn ###
         mha_impl = ConfigurationManager.get("ATTN_IMPLS").get("multihead_attn", "xformers_default_attn")
         if mha_impl == "torch_impl_attn":
+            from opensora.utils.custom.operators.xformers import memory_efficient_attention
+
             MLFlowManager.set_tag("multihead_attn", "torch_impl_attn")
             x = memory_efficient_attention(q, k, v, p=self.attn_drop.p, attn_bias=attn_bias)
             x = x.reshape(B, -1, C)
@@ -534,6 +538,8 @@ class MultiHeadCrossAttention(nn.Module):
 
         elif mha_impl == "padded_xformers_default_attn":
             # padded xformers default
+            from opensora.utils.custom.operators import padded_xformers_attn
+
             MLFlowManager.set_tag("multihead_attn", "padded_xformers_default_attn")
             attn_bias = attn_bias.broadcast_to(1, 16, 216000, 600)
             x = padded_xformers_attn(q, k, v, attn_bias=attn_bias)

@@ -6,6 +6,8 @@ from loguru import logger
 
 from opensora.utils.custom.common import to_numpy, to_tensor
 
+import pycuda.autoinit  # isort:skip
+
 
 class STDiT3TRT:
     def __init__(self, engine_path: str, verbose: bool = False):

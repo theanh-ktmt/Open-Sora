@@ -6,7 +6,7 @@ DURATION=${3:-"4s"}
 export CUDA_VISIBLE_DEVICES=$GPU
 export INFERRED_PATH="save/onnx/ckpts/${RESOLUTION}-${DURATION}/stdit3_inferred.onnx"
 export SIMPLIFIED_PATH="save/onnx/ckpts/${RESOLUTION}-${DURATION}/stdit3_simplified.onnx"
-export ENGINE_PATH="save/tensorrt/${RESOLUTION}-${DURATION}/stdit3_fp32_mp.engine"
+export ENGINE_PATH="save/tensorrt/${RESOLUTION}-${DURATION}/stdit3_fp32_mp_o3.engine"
 
 # Function to measure time taken for a command
 measure_time() {
